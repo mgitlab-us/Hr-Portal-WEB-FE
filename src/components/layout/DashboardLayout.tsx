@@ -1,20 +1,8 @@
 'use client';
-
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  LayoutDashboard,
-  Users,
-  Clock,
-  FileCheck,
-  BarChart3,
-  Settings,
-  LogOut,
-  ShieldCheck,
-  Menu,
-  X,
-} from 'lucide-react';
+import {LayoutDashboard,Users,Clock,FileCheck,BarChart3,Settings,LogOut,ShieldCheck,Menu,X,} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -56,6 +44,81 @@ const NavItem = ({ href, icon: Icon, label, active, onClick }: NavItemProps) => 
   </Link>
 );
 
+const navItems = [
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
+  { href: '/dashboard/employees', icon: Users, label: 'Employees' },
+  { href: '/dashboard/attendance', icon: Clock, label: 'Attendance' },
+  { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
+  { href: '/dashboard/reports', icon: BarChart3, label: 'Reports' },
+  { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
+];
+
+// ── 1. Sidebar is now declared completely outside of the main component function ──
+interface SidebarProps {
+  pathname: string;
+  user: any; // Replace with your exact User type if available
+  onLogout: () => void;
+  onNavClick?: () => void;
+}
+
+const Sidebar = ({ pathname, user, onLogout, onNavClick }: SidebarProps) => (
+  <div className="flex flex-col h-full">
+    {/* Logo */}
+    <div className="flex items-center gap-2.5 px-4 py-5 border-b border-slate-100">
+      <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
+        <ShieldCheck size={14} className="text-white" />
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-slate-800 leading-none tracking-tight">
+          TapIn
+        </p>
+        <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-widest font-medium">
+          Admin
+        </p>
+      </div>
+    </div>
+
+    {/* Nav */}
+    <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest px-3 mb-2">
+        Menu
+      </p>
+      {navItems.map((item) => (
+        <NavItem
+          key={item.href}
+          {...item}
+          active={pathname === item.href}
+          onClick={onNavClick}
+        />
+      ))}
+    </nav>
+
+    {/* User + Logout */}
+    <div className="px-3 py-4 border-t border-slate-100 space-y-0.5">
+      <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-1">
+        <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-600 flex-shrink-0">
+          {user?.name?.charAt(0)?.toUpperCase() || 'A'}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-700 truncate leading-none">
+            {user?.name || 'Administrator'}
+          </p>
+          <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider">
+            {user?.role || 'Admin'}
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={onLogout}
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all duration-150"
+      >
+        <LogOut size={14} className="flex-shrink-0" />
+        <span>Sign out</span>
+      </button>
+    </div>
+  </div>
+);
+
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -67,79 +130,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     router.replace('/login');
   };
 
-  const navItems = [
-    { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
-    { href: '/dashboard/employees', icon: Users, label: 'Employees' },
-    { href: '/dashboard/attendance', icon: Clock, label: 'Attendance' },
-    { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
-    { href: '/dashboard/reports', icon: BarChart3, label: 'Reports' },
-    { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
-  ];
-
-  const Sidebar = ({ onNavClick }: { onNavClick?: () => void }) => (
-    <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 py-5 border-b border-slate-100">
-        <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
-          <ShieldCheck size={14} className="text-white" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-800 leading-none tracking-tight">
-            TapIn
-          </p>
-          <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-widest font-medium">
-            Admin
-          </p>
-        </div>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest px-3 mb-2">
-          Menu
-        </p>
-        {navItems.map((item) => (
-          <NavItem
-            key={item.href}
-            {...item}
-            active={pathname === item.href}
-            onClick={onNavClick}
-          />
-        ))}
-      </nav>
-
-      {/* User + Logout */}
-      <div className="px-3 py-4 border-t border-slate-100 space-y-0.5">
-        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-1">
-          <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-600 flex-shrink-0">
-            {user?.name?.charAt(0)?.toUpperCase() || 'A'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-700 truncate leading-none">
-              {user?.name || 'Administrator'}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider">
-              {user?.role || 'Admin'}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all duration-150"
-        >
-          <LogOut size={14} className="flex-shrink-0" />
-          <span>Sign out</span>
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-slate-50 flex">
 
       {/* ── Desktop Sidebar */}
       <aside className="hidden lg:flex w-56 flex-col bg-slate-50 border-r border-slate-100 sticky top-0 h-screen flex-shrink-0">
-        <Sidebar />
+        {/* ── 2. Pass necessary states and actions as props ── */}
+        <Sidebar pathname={pathname} user={user} onLogout={handleLogout} />
       </aside>
 
       {/* ── Main */}
@@ -192,7 +189,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <Sidebar onNavClick={() => setIsMobileMenuOpen(false)} />
+              {/* ── 3. Pass states and the close drawer click action as props ── */}
+              <Sidebar 
+                pathname={pathname} 
+                user={user} 
+                onLogout={handleLogout} 
+                onNavClick={() => setIsMobileMenuOpen(false)} 
+              />
             </div>
           </div>
         </>

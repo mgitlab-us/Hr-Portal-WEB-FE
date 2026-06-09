@@ -1,18 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import {
-   Users,
-   Clock,
-   AlertTriangle,
-   TrendingUp,
-   Activity,
-   UserCheck,
-   UserMinus,
-   Timer,
-   ArrowUpRight,
-   Minus,
-} from 'lucide-react';
+import {Users,TrendingUp,Activity,UserCheck,UserMinus,Timer,ArrowUpRight,} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -94,6 +83,14 @@ function avatarColor(name: string) {
    return AVATAR_COLORS[(name?.charCodeAt(0) || 0) % AVATAR_COLORS.length];
 }
 
+type PulseItem = {
+   name?: string;
+   action: string;
+   time?: string;
+   color?: string;
+   companyId?: string;
+};
+
 export default function DashboardOverview() {
    const { user } = useAuthStore();
    const [stats, setStats] = useState({
@@ -104,9 +101,11 @@ export default function DashboardOverview() {
       late: 0,
       avgWorkHours: '0.0',
    });
-   const [pulse, setPulse] = useState<any[]>([]);
+   const [pulse, setPulse] = useState<PulseItem[]>([]);
 
    useEffect(() => {
+      if (!user?.companyId) return;
+
       const fetchDashboard = async () => {
          try {
             const [statsRes, pulseRes] = await Promise.all([
@@ -122,8 +121,18 @@ export default function DashboardOverview() {
 
       fetchDashboard();
 
-      const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000');
-      socket.on(`company:${user?.companyId}:activity:pulse`, (data) => {
+      const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000').replace(/\/api\/v1$/, '');
+      const socket = io(socketUrl, {
+         auth: { companyId: user.companyId },
+         transports: ['websocket'],
+      });
+
+      socket.on('connect_error', (err) => {
+         console.error('Socket connection error:', err);
+      });
+
+      socket.on('activity:pulse', (data) => {
+         if (data.companyId !== user.companyId) return;
          setPulse((prev) => [data, ...prev].slice(0, 8));
          fetchDashboard();
       });
