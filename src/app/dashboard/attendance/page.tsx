@@ -12,6 +12,7 @@ import {
   UserMinus,
   X,
   FileText,
+  MapPin,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -25,6 +26,10 @@ interface AttendanceLog {
   checkout: string;
   checkinAt: string;
   checkoutAt: string;
+  checkinLat?: number;
+  checkinLng?: number;
+  checkoutLat?: number;
+  checkoutLng?: number;
   color: string;
 }
 
@@ -266,6 +271,9 @@ export default function AttendanceLogsPage() {
                     <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest hidden lg:table-cell">
                       Duration
                     </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
+                      Location
+                    </th>
                     <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-right">
                       Actions
                     </th>
@@ -339,6 +347,37 @@ export default function AttendanceLogsPage() {
                             <p className="text-sm text-slate-500 tabular-nums">
                               {duration}
                             </p>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center justify-center gap-2">
+                              {log.checkinLat && log.checkinLng && (
+                                <a
+                                  href={`https://www.google.com/maps?q=${log.checkinLat},${log.checkinLng}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-colors"
+                                  title="Check-in Location"
+                                >
+                                  <MapPin size={14} />
+                                  <span className="text-[8px] font-bold absolute -top-1 -right-1 bg-white border border-emerald-200 rounded-full px-1">IN</span>
+                                </a>
+                              )}
+                              {log.checkoutLat && log.checkoutLng && (
+                                <a
+                                  href={`https://www.google.com/maps?q=${log.checkoutLat},${log.checkoutLng}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-7 h-7 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors"
+                                  title="Check-out Location"
+                                >
+                                  <MapPin size={14} />
+                                  <span className="text-[8px] font-bold absolute -top-1 -right-1 bg-white border border-indigo-200 rounded-full px-1">OUT</span>
+                                </a>
+                              )}
+                              {!log.checkinLat && !log.checkoutLat && (
+                                <span className="text-[10px] font-medium text-slate-300 italic">No GPS</span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-5 py-3.5 text-right">
                             <button
