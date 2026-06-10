@@ -19,18 +19,36 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+let isRefreshing = false;
+let subscribers: ((token: string) => void)[] = [];
+
+function onRefreshed(token: string) {
+  subscribers.forEach((cb) => cb(token));
+  subscribers = [];
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     
-    // Don't refresh if it's a login attempt or already retrying
     if (
       error.response?.status === 401 && 
       !originalRequest._retry && 
       !originalRequest.url?.includes('/auth/login')
     ) {
+      if (isRefreshing) {
+        return new Promise((resolve) => {
+          subscribers.push((token: string) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            resolve(api(originalRequest));
+          });
+        });
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
+
       try {
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
@@ -41,12 +59,17 @@ api.interceptors.response.use(
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', newRefreshToken);
         
+        isRefreshing = false;
+        onRefreshed(accessToken);
+        
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (err) {
+        isRefreshing = false;
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         if (typeof window !== 'undefined') window.location.href = '/login';
+        return Promise.reject(err);
       }
     }
     return Promise.reject(error);

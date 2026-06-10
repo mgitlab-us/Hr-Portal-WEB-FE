@@ -2,7 +2,7 @@
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {LayoutDashboard,Users,Clock,FileCheck,BarChart3,Settings,LogOut,ShieldCheck,Menu,X,} from 'lucide-react';
+import {LayoutDashboard,Users,Clock,FileCheck,Plane,BarChart3,Settings,LogOut,ShieldCheck,Menu,X,History} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -47,8 +47,10 @@ const NavItem = ({ href, icon: Icon, label, active, onClick }: NavItemProps) => 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
   { href: '/dashboard/employees', icon: Users, label: 'Employees' },
+  { href: '/dashboard/shifts', icon: History, label: 'Shifts' },
   { href: '/dashboard/attendance', icon: Clock, label: 'Attendance' },
   { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
+  { href: '/dashboard/leaves', icon: Plane, label: 'Leaves' },
   { href: '/dashboard/reports', icon: BarChart3, label: 'Reports' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];
@@ -83,14 +85,21 @@ const Sidebar = ({ pathname, user, onLogout, onNavClick }: SidebarProps) => (
       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest px-3 mb-2">
         Menu
       </p>
-      {navItems.map((item) => (
-        <NavItem
-          key={item.href}
-          {...item}
-          active={pathname === item.href}
-          onClick={onNavClick}
-        />
-      ))}
+      {navItems
+        .filter(item => {
+          if (user?.role === 'SUPER_ADMIN') {
+            return !['Corrections', 'Leaves'].includes(item.label);
+          }
+          return true;
+        })
+        .map((item) => (
+          <NavItem
+            key={item.href}
+            {...item}
+            active={pathname === item.href}
+            onClick={onNavClick}
+          />
+        ))}
     </nav>
 
     {/* User + Logout */}

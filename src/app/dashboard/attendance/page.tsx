@@ -11,6 +11,7 @@ import {
   Timer,
   UserMinus,
   X,
+  FileText,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -265,6 +266,9 @@ export default function AttendanceLogsPage() {
                     <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest hidden lg:table-cell">
                       Duration
                     </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-right">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -335,6 +339,33 @@ export default function AttendanceLogsPage() {
                             <p className="text-sm text-slate-500 tabular-nums">
                               {duration}
                             </p>
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const [y, m] = date.split('-').map(Number);
+                                  const res = await api.get(
+                                    `/reports/employee-pdf?employeeId=${log.id}&year=${y}&month=${m}`,
+                                    { responseType: 'blob' }
+                                  );
+                                  const url = window.URL.createObjectURL(new Blob([res.data]));
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.setAttribute('download', `${log.name}-attendance-${date}.pdf`);
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  link.remove();
+                                } catch (err) {
+                                  console.error('PDF download failed:', err);
+                                  alert('Failed to download report.');
+                                }
+                              }}
+                              className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                              title="Download Monthly Report"
+                            >
+                              <FileText size={14} />
+                            </button>
                           </td>
                         </tr>
                       );

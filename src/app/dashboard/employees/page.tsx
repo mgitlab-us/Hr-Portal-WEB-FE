@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   XCircle,
   ChevronDown,
+  FileText,
+  UserX,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -20,7 +22,7 @@ interface Employee {
   id: string;
   name: string;
   email: string;
-  role: 'EMPLOYEE' | 'ADMIN' | 'SUPER_ADMIN';
+  role: 'EMPLOYEE' | 'ADMIN';
   isActive: boolean;
   createdAt: string;
   profile?: {
@@ -91,7 +93,10 @@ export default function EmployeesPage() {
     role: 'EMPLOYEE',
     designation: '',
     department: '',
+    shiftProfileId: '',
+    password: '',
   });
+  const [shifts, setShifts] = useState<any[]>([]);
 
   const fetchEmployees = async () => {
     try {
@@ -106,6 +111,7 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     fetchEmployees();
+    api.get('/shifts').then(res => setShifts(res.data)).catch(() => {});
   }, []);
 
   const filteredEmployees = useMemo(() => {
@@ -124,7 +130,7 @@ export default function EmployeesPage() {
       await api.post('/employees', newEmployee);
       setIsAddModalOpen(false);
       fetchEmployees();
-      setNewEmployee({ name: '', email: '', password: '', role: 'EMPLOYEE', designation: '', department: '' });
+      setNewEmployee({ name: '', email: '', password: '', role: 'EMPLOYEE', designation: '', department: '', shiftProfileId: '' });
     } catch {
       alert('Failed to create employee. Please check if email is unique.');
     } finally {
@@ -286,14 +292,20 @@ export default function EmployeesPage() {
                             {emp.profile?.employeeCode || '—'}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5">
-                          <button
-                            onClick={() => toggleStatus(emp.id)}
-                            className="p-1.5 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"
-                            title="Toggle status"
-                          >
-                            <ShieldAlert size={14} />
-                          </button>
+                        <td className="px-5 py-3.5 flex items-center justify-end gap-2 text-right">
+                          {emp.role !== 'SUPER_ADMIN' && (
+                            <button
+                              onClick={() => toggleStatus(emp.id)}
+                              className={`p-1.5 rounded-md transition-all ${
+                                emp.isActive 
+                                  ? 'text-slate-400 hover:text-red-500 hover:bg-red-50' 
+                                  : 'text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50'
+                              }`}
+                              title={emp.isActive ? "Deactivate User" : "Activate User"}
+                            >
+                              <UserX size={14} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -370,20 +382,39 @@ export default function EmployeesPage() {
                 />
               </div>
 
-              {/* Role select */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-slate-600">Role</label>
-                <div className="relative">
-                  <select
-                    value={newEmployee.role}
-                    onChange={set('role')}
-                    className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
-                  >
-                    <option value="EMPLOYEE">Employee</option>
-                    <option value="ADMIN">Admin</option>
-                    <option value="SUPER_ADMIN">Super Admin</option>
-                  </select>
-                  <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <div className="grid grid-cols-2 gap-4">
+                {/* Role select */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-slate-600">Role</label>
+                  <div className="relative">
+                    <select
+                      value={newEmployee.role}
+                      onChange={set('role')}
+                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                    >
+                      <option value="EMPLOYEE">Employee</option>
+                      <option value="ADMIN">Admin (HR Manager)</option>
+                    </select>
+                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* Shift select */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-slate-600">Shift Profile</label>
+                  <div className="relative">
+                    <select
+                      value={newEmployee.shiftProfileId}
+                      onChange={set('shiftProfileId')}
+                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                    >
+                      <option value="">Default (Company settings)</option>
+                      {shifts.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
                 </div>
               </div>
 
