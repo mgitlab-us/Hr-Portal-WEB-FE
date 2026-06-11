@@ -28,8 +28,10 @@ interface AttendanceLog {
   checkoutAt: string;
   checkinLat?: number;
   checkinLng?: number;
+  checkinAccuracy?: number;
   checkoutLat?: number;
   checkoutLng?: number;
+  checkoutAccuracy?: number;
   color: string;
 }
 
@@ -272,7 +274,10 @@ export default function AttendanceLogsPage() {
                       Duration
                     </th>
                     <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
-                      Location
+                      In Location
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
+                      Out Location
                     </th>
                     <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-right">
                       Actions
@@ -349,33 +354,44 @@ export default function AttendanceLogsPage() {
                             </p>
                           </td>
                           <td className="px-5 py-3.5">
-                            <div className="flex items-center justify-center gap-2">
-                              {log.checkinLat && log.checkinLng && (
+                            <div className="flex items-center justify-center">
+                              {log.checkinLat && log.checkinLng ? (
                                 <a
                                   href={`https://www.google.com/maps?q=${log.checkinLat},${log.checkinLng}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-colors"
-                                  title="Check-in Location"
+                                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
+                                    log.checkinAccuracy && log.checkinAccuracy > 100 
+                                      ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' 
+                                      : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                                  }`}
+                                  title={`Check-in Location${log.checkinAccuracy ? ` (Accuracy: ${Math.round(log.checkinAccuracy)}m)` : ''}`}
                                 >
                                   <MapPin size={14} />
-                                  <span className="text-[8px] font-bold absolute -top-1 -right-1 bg-white border border-emerald-200 rounded-full px-1">IN</span>
                                 </a>
+                              ) : (
+                                <span className="text-[10px] text-slate-300 italic">No GPS</span>
                               )}
-                              {log.checkoutLat && log.checkoutLng && (
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center justify-center">
+                              {log.checkoutLat && log.checkoutLng ? (
                                 <a
                                   href={`https://www.google.com/maps?q=${log.checkoutLat},${log.checkoutLng}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="w-7 h-7 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors"
-                                  title="Check-out Location"
+                                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
+                                    log.checkoutAccuracy && log.checkoutAccuracy > 100 
+                                      ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' 
+                                      : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                                  }`}
+                                  title={`Check-out Location${log.checkoutAccuracy ? ` (Accuracy: ${Math.round(log.checkoutAccuracy)}m)` : ''}`}
                                 >
                                   <MapPin size={14} />
-                                  <span className="text-[8px] font-bold absolute -top-1 -right-1 bg-white border border-indigo-200 rounded-full px-1">OUT</span>
                                 </a>
-                              )}
-                              {!log.checkinLat && !log.checkoutLat && (
-                                <span className="text-[10px] font-medium text-slate-300 italic">No GPS</span>
+                              ) : (
+                                <span className="text-[10px] text-slate-300 italic">No GPS</span>
                               )}
                             </div>
                           </td>
