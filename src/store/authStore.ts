@@ -11,6 +11,7 @@ interface User {
     name: string;
     timezone: string;
   };
+  mustChangePassword?: boolean;
 }
 
 interface AuthState {

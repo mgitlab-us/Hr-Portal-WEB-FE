@@ -16,13 +16,14 @@ import {
   UserX,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 interface Employee {
   id: string;
   name: string;
   email: string;
-  role: 'EMPLOYEE' | 'ADMIN';
+  role: 'EMPLOYEE' | 'ADMIN' | 'SUPER_ADMIN';
   isActive: boolean;
   createdAt: string;
   profile?: {
@@ -81,6 +82,7 @@ function Field({
 }
 
 export default function EmployeesPage() {
+  const { user } = useAuthStore();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -94,7 +96,6 @@ export default function EmployeesPage() {
     designation: '',
     department: '',
     shiftProfileId: '',
-    password: '',
   });
   const [shifts, setShifts] = useState<any[]>([]);
 
@@ -110,9 +111,10 @@ export default function EmployeesPage() {
   };
 
   useEffect(() => {
+    if (user?.mustChangePassword) return;
     fetchEmployees();
     api.get('/shifts').then(res => setShifts(res.data)).catch(() => {});
-  }, []);
+  }, [user]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter(

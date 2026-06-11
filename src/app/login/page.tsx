@@ -45,8 +45,20 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left Panel - Form */}
+    <div className="min-h-screen flex bg-white">
+      {/* Left Panel - Decorative image, flush top/bottom/left, rounded right corners only */}
+      <div className="hidden lg:flex flex-1 relative overflow-hidden rounded-r-[4.5rem]">
+        <Image
+          src={decorativeImg}
+          alt="Decorative background"
+          fill
+          sizes="(min-width: 1024px) 58vw, 100vw"
+          className="object-cover object-center"
+          priority
+        />
+      </div>
+
+      {/* Right Panel - Form */}
       <div className="w-full lg:w-[42%] bg-white flex flex-col justify-center px-12 py-16">
         <div className="max-w-[400px] w-full mx-auto">
           {/* Logo */}
@@ -116,15 +128,18 @@ export default function LoginPage() {
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <div
                   onClick={() => setRememberMe(!rememberMe)}
-                  className={`w-4 h-4 rounded flex items-center justify-center border transition-colors cursor-pointer ${
-                    rememberMe
-                      ? 'bg-indigo-600 border-indigo-600'
-                      : 'bg-white border-gray-300'
-                  }`}
+                  className={`w-4 h-4 rounded flex items-center justify-center border transition-colors cursor-pointer ${rememberMe ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'
+                    }`}
                 >
                   {rememberMe && (
                     <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <path
+                        d="M2 6l3 3 5-5"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                   )}
                 </div>
@@ -154,10 +169,8 @@ export default function LoginPage() {
               )}
             </button>
 
-            {/* Divider */}
             <div className="relative flex items-center gap-3 py-1">
               <div className="flex-1 h-px bg-gray-200" />
-             
               <div className="flex-1 h-px bg-gray-200" />
             </div>
           </form>
@@ -171,31 +184,15 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
-
-      {/* Right Panel - Decorative */}
-      <div className="hidden lg:block flex-1 relative overflow-hidden">
-        <Image
-          src={decorativeImg}
-          alt="Decorative background"
-          fill          sizes="(min-width: 1024px) 50vw, 100vw"          className="object-cover object-center"
-          priority
-        />
-      </div>
     </div>
   );
 }
 
-/* ─── Sub-components ─── */
-
 function TapInLogo() {
   return (
     <svg width="52" height="44" viewBox="0 0 52 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Crown points */}
       <path d="M4 20 L13 4 L26 16 L39 4 L48 20 L36 28 L26 22 L16 28 Z" fill="#4F46E5" />
-      {/* Stem */}
       <path d="M16 28 L26 22 L36 28 L32 44 L20 44 Z" fill="#4F46E5" />
     </svg>
   );
 }
-
-

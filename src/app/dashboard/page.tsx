@@ -104,7 +104,7 @@ export default function DashboardOverview() {
    const [pulse, setPulse] = useState<PulseItem[]>([]);
 
    useEffect(() => {
-      if (!user?.companyId) return;
+      if (!user?.companyId || user?.mustChangePassword) return;
 
       const fetchDashboard = async () => {
          try {

@@ -134,159 +134,8 @@ export default function SettingsPage() {
             <Loader2 size={16} className="text-slate-400 animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            {/* ── LEFT COLUMN: Shift Config */}
+          <div className="max-w-2xl mx-auto space-y-6">
             <div className="space-y-4">
-
-              {/* Section label */}
-              <div className="flex items-center gap-2">
-                <Clock size={13} className="text-slate-400" />
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Shift Configuration</p>
-              </div>
-
-              {/* Check-in time card */}
-              <div className="bg-white border border-slate-100 rounded-xl shadow-sm">
-                <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-50">
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Check-in Time</p>
-                    <h3 className="text-sm font-semibold text-slate-700">Expected Arrival</h3>
-                  </div>
-                  <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg tabular-nums">
-                    {String(localCheckin.hour).padStart(2, '0')}:{String(localCheckin.minute).padStart(2, '0')} {localCheckin.period}
-                  </span>
-                </div>
-                <div className="px-5 py-4 space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    {/* Hour */}
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Hour</label>
-                      <div className="relative">
-                        <select
-                          value={localCheckin.hour}
-                          onChange={(e) => setLocalCheckin({ ...localCheckin, hour: parseInt(e.target.value) })}
-                          className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-7 text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
-                        >
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                            <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      </div>
-                    </div>
-                    {/* Minute */}
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Minute</label>
-                      <div className="relative">
-                        <select
-                          value={localCheckin.minute}
-                          onChange={(e) => setLocalCheckin({ ...localCheckin, minute: parseInt(e.target.value) })}
-                          className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-7 text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
-                        >
-                          {[0, 15, 30, 45].map((m) => (
-                            <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      </div>
-                    </div>
-                    {/* AM/PM */}
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Period</label>
-                      <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5 gap-0.5 h-[38px]">
-                        {(['AM', 'PM'] as const).map((p) => (
-                          <button
-                            key={p}
-                            onClick={() => setLocalCheckin({ ...localCheckin, period: p })}
-                            className={`flex-1 rounded-md text-[11px] font-semibold transition-all ${localCheckin.period === p
-                              ? 'bg-white text-slate-800 shadow-sm border border-slate-200'
-                              : 'text-slate-400 hover:text-slate-600'
-                              }`}
-                          >
-                            {p}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                    <div className="w-1 h-1 rounded-full bg-amber-400 flex-shrink-0" />
-                    <p className="text-[11px] text-amber-700">
-                      Arrivals after {localCheckin.hour}:{String(localCheckin.minute).padStart(2, '0')} {localCheckin.period} will be flagged as late
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Durations card */}
-              <div className="bg-white border border-slate-100 rounded-xl shadow-sm">
-                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-50">
-                  <Timer size={12} className="text-slate-400" />
-                  <h3 className="text-sm font-semibold text-slate-700">Time Allocations</h3>
-                </div>
-                <div className="px-5 py-4 divide-y divide-slate-50 space-y-0">
-
-                  {/* Work shift */}
-                  <div className="pb-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-semibold text-slate-700">Work Shift</p>
-                      <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded tabular-nums">
-                        {workDur.h}h {workDur.m}m
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <NumInput label="Hours" value={workDur.h} onChange={(v) => setSettings({ ...settings, workMinutesPerDay: v * 60 + workDur.m })} />
-                      <NumInput label="Minutes" value={workDur.m} onChange={(v) => setSettings({ ...settings, workMinutesPerDay: workDur.h * 60 + v })} />
-                    </div>
-                  </div>
-
-                  {/* Break */}
-                  <div className="py-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-semibold text-slate-700">Break Time</p>
-                      <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded tabular-nums">
-                        {breakDur.h}h {breakDur.m}m
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <NumInput label="Hours" value={breakDur.h} onChange={(v) => setSettings({ ...settings, breakMinutesAllocated: v * 60 + breakDur.m })} />
-                      <NumInput label="Minutes" value={breakDur.m} onChange={(v) => setSettings({ ...settings, breakMinutesAllocated: breakDur.h * 60 + v })} />
-                    </div>
-                  </div>
-
-                  {/* Grace */}
-                  <div className="pt-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-semibold text-slate-700">Grace Period</p>
-                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded tabular-nums">
-                        {settings.gracePeriodMinutes}m
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <NumInput label="Minutes" value={settings.gracePeriodMinutes} onChange={(v) => setSettings({ ...settings, gracePeriodMinutes: v })} />
-                      <div /> {/* spacer */}
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              {/* Save shift */}
-              <button
-                onClick={handleSaveShift}
-                disabled={savingShift}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-              >
-                {savingShift ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                Save Shift Settings
-              </button>
-            </div>
-
-            {/* ── RIGHT COLUMN: Company Profile */}
-            <div className="space-y-4">
-
-              {/* Section label */}
               <div className="flex items-center gap-2">
                 <Building2 size={13} className="text-slate-400" />
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Company Profile</p>
@@ -330,7 +179,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Save profile */}
               <button
                 onClick={handleSaveProfile}
                 disabled={savingProfile}
@@ -340,7 +188,6 @@ export default function SettingsPage() {
                 Save Company Profile
               </button>
             </div>
-
           </div>
         )}
       </div>

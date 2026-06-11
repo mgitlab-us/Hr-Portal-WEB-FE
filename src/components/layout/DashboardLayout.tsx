@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {LayoutDashboard,Users,Clock,FileCheck,Plane,BarChart3,Settings,LogOut,ShieldCheck,Menu,X,History} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import ForceChangePassword from '@/components/auth/ForceChangePassword';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -88,8 +89,10 @@ const Sidebar = ({ pathname, user, onLogout, onNavClick }: SidebarProps) => (
       {navItems
         .filter(item => {
           if (user?.role === 'SUPER_ADMIN') {
+            // Boss monitors Attendance but doesn't handle Corrections or Leaves
             return !['Corrections', 'Leaves'].includes(item.label);
           }
+          // HR Manager (ADMIN) sees everything
           return true;
         })
         .map((item) => (
@@ -141,6 +144,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
+      <ForceChangePassword />
 
       {/* ── Desktop Sidebar */}
       <aside className="hidden lg:flex w-56 flex-col bg-slate-50 border-r border-slate-100 sticky top-0 h-screen flex-shrink-0">
