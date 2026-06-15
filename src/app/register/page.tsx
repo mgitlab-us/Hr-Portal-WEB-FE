@@ -32,10 +32,28 @@ export default function RegisterPage() {
     setLoading(true);
     setError('');
 
+    // Client-side validation for instant UX feedback
+    if (!formData.adminEmail.includes('@') || !formData.adminEmail.toLowerCase().endsWith('.com')) {
+      setError('Email must be a valid .com address');
+      setLoading(false);
+      return;
+    }
+    
+    if (formData.adminPassword.length < 8) {
+      setError('Password must be at least 8 characters');
+      setLoading(false);
+      return;
+    }
+    if (!/[A-Z]/.test(formData.adminPassword) || !/[0-9]/.test(formData.adminPassword)) {
+      setError('Password must contain at least one uppercase letter and one number');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await api.post('/auth/register', formData);
+      const res = await api.post('/auth/register-company', formData);
       const { employee, accessToken, refreshToken } = res.data;
-      
+
       setAuth(employee, accessToken, refreshToken);
       router.push('/dashboard');
     } catch (err: any) {
@@ -48,7 +66,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 py-12">
       <div className="max-w-[1000px] w-full grid lg:grid-cols-2 bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
-        
+
         {/* Left Side: Brand/Marketing */}
         <div className="hidden lg:flex flex-col justify-between bg-slate-900 p-12 text-white">
           <div>
@@ -84,7 +102,7 @@ export default function RegisterPage() {
               </div>
             </div>
           </div>
-          
+
           <p className="text-xs text-slate-500 font-medium tracking-widest uppercase mt-8">
             © 2026 TapIn Technologies Inc.
           </p>
@@ -93,9 +111,9 @@ export default function RegisterPage() {
         {/* Right Side: Form */}
         <div className="p-8 lg:p-12">
           <div className="mb-10 lg:hidden flex justify-center">
-             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-indigo-100 shadow-xl">
-               <ShieldCheck size={24} className="text-white" />
-             </div>
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-indigo-100 shadow-xl">
+              <ShieldCheck size={24} className="text-white" />
+            </div>
           </div>
 
           <div className="mb-8">
@@ -123,7 +141,7 @@ export default function RegisterPage() {
                     value={formData.companyName}
                     onChange={handleChange}
                     placeholder="Acme Corp"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                   />
                 </div>
               </div>
@@ -139,7 +157,7 @@ export default function RegisterPage() {
                     required
                     value={formData.timezone}
                     onChange={handleChange as any}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all appearance-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all appearance-none"
                   >
                     <option value="UTC">UTC (Default)</option>
                     <option value="America/New_York">New York (EST/EDT)</option>
@@ -147,7 +165,6 @@ export default function RegisterPage() {
                     <option value="Asia/Dubai">Dubai (GST)</option>
                     <option value="Asia/Karachi">Karachi (PKT)</option>
                     <option value="Asia/Singapore">Singapore (SGT)</option>
-                    {/* Add more common ones or use a library, but sticking to basics for now */}
                     <option value={Intl.DateTimeFormat().resolvedOptions().timeZone}>Detect: {Intl.DateTimeFormat().resolvedOptions().timeZone}</option>
                   </select>
                 </div>
@@ -168,7 +185,7 @@ export default function RegisterPage() {
                   value={formData.adminName}
                   onChange={handleChange}
                   placeholder="John Doe"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                 />
               </div>
             </div>
@@ -186,7 +203,7 @@ export default function RegisterPage() {
                   value={formData.adminEmail}
                   onChange={handleChange}
                   placeholder="john@company.com"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                 />
               </div>
             </div>
@@ -201,7 +218,7 @@ export default function RegisterPage() {
                   value={formData.adminPassword}
                   onChange={handleChange}
                   placeholder="Min. 8 characters"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                 />
                 <button
                   type="button"

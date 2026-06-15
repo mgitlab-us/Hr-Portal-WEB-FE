@@ -4,10 +4,8 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Mail, Lock, ShieldCheck, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import Image from 'next/image';
-import decorativeImg from './decorative.jpg';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,154 +43,162 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white">
-      {/* Left Panel - Decorative image, flush top/bottom/left, rounded right corners only */}
-      <div className="hidden lg:flex flex-1 relative overflow-hidden rounded-r-[4.5rem]">
-        <Image
-          src={decorativeImg}
-          alt="Decorative background"
-          fill
-          sizes="(min-width: 1024px) 58vw, 100vw"
-          className="object-cover object-center"
-          priority
-        />
-      </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 py-12">
+      <div className="max-w-[1200px] w-full grid lg:grid-cols-2 bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 min-h-[700px]">
 
-      {/* Right Panel - Form */}
-      <div className="w-full lg:w-[42%] bg-white flex flex-col justify-center px-12 py-16">
-        <div className="max-w-[400px] w-full mx-auto">
-          {/* Logo */}
-          <div className="mb-10">
-            <TapInLogo />
-          </div>
-
-          {/* Heading */}
-          <div className="mb-8">
-            <h1 className="text-[2rem] font-bold text-gray-900 leading-tight">
-              Welcome back !
+        {/* Left Side: Brand/Marketing */}
+        <div className="hidden lg:flex flex-col justify-between bg-slate-900 p-12 lg:p-16 text-white">
+          <div>
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center mb-8 shadow-indigo-500/20 shadow-xl">
+              <ShieldCheck size={24} className="text-white" />
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight mb-4">
+              Welcome <br />
+              <span className="text-indigo-400">Back</span>
             </h1>
-            <p className="text-gray-500 mt-2 text-sm">
-              Enter to start managing your organization.
+            <p className="text-slate-400 text-lg max-w-sm">
+              Sign in to manage your team, track attendance, and keep operations running smoothly.
             </p>
           </div>
 
-          {/* Error */}
+          <div className="space-y-6">
+            <div className="flex gap-4">
+              <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 text-indigo-400">
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                <p className="font-semibold">Admin Portal</p>
+                <p className="text-sm text-slate-400">Restricted access for organisation admins only.</p>
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 text-indigo-400">
+                <Lock size={20} />
+              </div>
+              <div>
+                <p className="font-semibold">Secure Sessions</p>
+                <p className="text-sm text-slate-400">JWT-based auth with refresh token rotation.</p>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500 font-medium tracking-widest uppercase mt-8">
+            © 2026 TapIn Technologies Inc.
+          </p>
+        </div>
+
+        {/* Right Side: Form */}
+        <div className="p-8 lg:p-16 flex flex-col justify-center">
+          <div className="mb-10 lg:hidden flex justify-center">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-indigo-100 shadow-xl">
+              <ShieldCheck size={24} className="text-white" />
+            </div>
+          </div>
+
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-slate-800">Sign In</h2>
+            <p className="text-sm text-slate-500 mt-1">Enter your credentials to access the dashboard.</p>
+          </div>
+
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+            <div className="mb-6 p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your mail address"
-                required
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
-              />
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Work Email Address</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Mail size={16} />
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="john@company.com"
+                  required
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                />
+              </div>
             </div>
 
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Password <span className="text-red-500">*</span>
-              </label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Password</label>
               <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Lock size={16} />
+                </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder="Enter your password"
                   required
-                  className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-12 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-12 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                 >
-                  {showPassword ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            {/* Remember Me + Forgot */}
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <div
                   onClick={() => setRememberMe(!rememberMe)}
-                  className={`w-4 h-4 rounded flex items-center justify-center border transition-colors cursor-pointer ${rememberMe ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'
+                  className={`w-4 h-4 rounded flex items-center justify-center border transition-colors cursor-pointer ${rememberMe ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'
                     }`}
                 >
                   {rememberMe && (
                     <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
-                      <path
-                        d="M2 6l3 3 5-5"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
+                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
                 </div>
-                <span className="text-sm text-gray-600">Remember me</span>
+                <span className="text-sm text-slate-600">Remember me</span>
               </label>
               <Link
                 href="/forgot-password"
-                className="text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                className="text-sm text-indigo-600 hover:text-indigo-700 font-semibold transition-colors"
               >
-                Forgot your password ?
+                Forgot password?
               </Link>
             </div>
 
-            {/* Submit */}
+            <div className="h-px bg-slate-100 my-2" />
+            <div className="h-px bg-slate-100 my-2" />
+            <div className="h-px bg-slate-100 my-2" />
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm mt-2"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-4 rounded-xl transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 mt-4"
             >
               {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Logging in...</span>
-                </>
+                <Loader2 size={18} className="animate-spin" />
               ) : (
-                <span>Log In</span>
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight size={18} />
+                </>
               )}
             </button>
 
-            <div className="relative flex items-center gap-3 py-1">
-              <div className="flex-1 h-px bg-gray-200" />
-              <div className="flex-1 h-px bg-gray-200" />
-            </div>
+            <p className="text-center text-sm text-slate-500 mt-6">
+              Don't have an account?{' '}
+              <Link href="/register" className="text-indigo-600 font-semibold hover:underline">
+                Create Organisation
+              </Link>
+            </p>
           </form>
-
-          {/* Register Link */}
-          <p className="text-center mt-8 text-sm text-gray-500">
-            Dont have an account ?{' '}
-            <Link href="/register" className="text-indigo-600 hover:text-indigo-700 font-medium">
-              Register here
-            </Link>
-          </p>
         </div>
       </div>
     </div>
-  );
-}
-
-function TapInLogo() {
-  return (
-    <svg width="52" height="44" viewBox="0 0 52 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M4 20 L13 4 L26 16 L39 4 L48 20 L36 28 L26 22 L16 28 Z" fill="#4F46E5" />
-      <path d="M16 28 L26 22 L36 28 L32 44 L20 44 Z" fill="#4F46E5" />
-    </svg>
   );
 }
