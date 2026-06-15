@@ -308,7 +308,7 @@ export default function AttendanceLogsPage() {
                         if (diff > 0) {
                           const h = Math.floor(diff / 60);
                           const m = Math.floor(diff % 60);
-                          duration = `${h}h ${m}m`;
+                          duration = h > 0 ? `${h}h ${m}m` : `${m}m`;
                         }
                       }
 

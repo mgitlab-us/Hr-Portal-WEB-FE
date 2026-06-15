@@ -316,9 +316,8 @@ export default function DashboardOverview() {
                      </h2>
                      <div className="flex items-end gap-1.5">
                         <span className="text-4xl font-semibold text-slate-800 tracking-tight leading-none">
-                           {stats.avgWorkHours}
+                            {stats.avgWorkHours}
                         </span>
-                        <span className="text-lg font-medium text-slate-400 mb-0.5">h</span>
                      </div>
                      <p className="text-xs text-slate-400 mt-2">Daily team average</p>
                   </div>
