@@ -121,7 +121,7 @@ export default function DashboardOverview() {
 
       fetchDashboard();
 
-      const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000').replace(/\/api\/v1$/, '');
+      const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1').replace(/\/api\/v1$/, '');
       const socket = io(socketUrl, {
          auth: { companyId: user.companyId },
          transports: ['websocket'],
