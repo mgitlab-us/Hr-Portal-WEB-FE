@@ -1,20 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import {
-  Users,
-  UserPlus,
-  Search,
-  X,
-  Mail,
-  ShieldAlert,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  ChevronDown,
-  FileText,
-  UserX,
-} from 'lucide-react';
+import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, UserX } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -113,7 +100,7 @@ export default function EmployeesPage() {
   useEffect(() => {
     if (user?.mustChangePassword) return;
     fetchEmployees();
-    api.get('/shifts').then(res => setShifts(res.data)).catch(() => {});
+    api.get('/shifts').then(res => setShifts(res.data)).catch(() => { });
   }, [user]);
 
   const filteredEmployees = useMemo(() => {
@@ -298,11 +285,10 @@ export default function EmployeesPage() {
                           {emp.role !== 'SUPER_ADMIN' && (
                             <button
                               onClick={() => toggleStatus(emp.id)}
-                              className={`p-1.5 rounded-md transition-all ${
-                                emp.isActive 
-                                  ? 'text-slate-400 hover:text-red-500 hover:bg-red-50' 
+                              className={`p-1.5 rounded-md transition-all ${emp.isActive
+                                  ? 'text-slate-400 hover:text-red-500 hover:bg-red-50'
                                   : 'text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50'
-                              }`}
+                                }`}
                               title={emp.isActive ? "Deactivate User" : "Activate User"}
                             >
                               <UserX size={14} />
