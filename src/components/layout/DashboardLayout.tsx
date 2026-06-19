@@ -143,6 +143,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     router.replace('/login');
   };
 
+  // Redirect if not logged in
+  React.useEffect(() => {
+    if (!user && !localStorage.getItem('auth-storage')) {
+      router.replace('/login');
+    }
+  }, [user, router]);
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <ForceChangePassword />
