@@ -75,6 +75,7 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [employeeCodeError, setEmployeeCodeError] = useState<string | null>(null);
   const [newEmployee, setNewEmployee] = useState({
     name: '',
     email: '',
@@ -82,6 +83,7 @@ export default function EmployeesPage() {
     role: 'EMPLOYEE',
     designation: '',
     department: '',
+    employeeCode: '',
     shiftProfileId: '',
   });
   const [shifts, setShifts] = useState<any[]>([]);
@@ -115,13 +117,19 @@ export default function EmployeesPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setEmployeeCodeError(null);
     try {
       await api.post('/employees', newEmployee);
       setIsAddModalOpen(false);
       fetchEmployees();
-      setNewEmployee({ name: '', email: '', password: '', role: 'EMPLOYEE', designation: '', department: '', shiftProfileId: '' });
-    } catch {
-      alert('Failed to create employee. Please check if email is unique.');
+      setNewEmployee({ name: '', email: '', password: '', role: 'EMPLOYEE', designation: '', department: '', employeeCode: '', shiftProfileId: '' });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || '';
+      if (err?.response?.status === 409 && msg.toLowerCase().includes('code')) {
+        setEmployeeCodeError('This Employee ID is already in use. Please edit the ID field below.');
+      } else {
+        alert(msg || 'Failed to create employee. Please check if email is unique.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -368,6 +376,29 @@ export default function EmployeesPage() {
                   onChange={set('department')}
                   placeholder="Engineering"
                 />
+              </div>
+
+              {/* Employee Code */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600">Employee ID</label>
+                <input
+                  value={newEmployee.employeeCode}
+                  onChange={(e) => {
+                    setEmployeeCodeError(null);
+                    set('employeeCode')(e);
+                  }}
+                  placeholder="Auto-generated if blank (e.g. ASE-SOF-001)"
+                  className={`w-full bg-white border rounded-lg py-2.5 px-3 text-sm font-mono text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                    employeeCodeError
+                      ? 'border-red-400 ring-red-100 ring-2'
+                      : 'border-slate-200 focus:ring-indigo-500/20 focus:border-indigo-400'
+                  }`}
+                />
+                {employeeCodeError ? (
+                  <p className="text-xs text-red-500 font-medium">{employeeCodeError}</p>
+                ) : (
+                  <p className="text-[10px] text-slate-400 italic">Auto-generated · Format: DES-DEP-001 · You can override this</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
