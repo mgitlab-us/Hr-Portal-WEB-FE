@@ -2,7 +2,7 @@
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {LayoutDashboard,Users,Clock,FileCheck,Plane,BarChart3,Settings,LogOut,ShieldCheck,Menu,X,History} from 'lucide-react';
+import {LayoutDashboard,Users,Clock,FileCheck,Plane,BarChart3,Settings,LogOut,ShieldCheck,Menu,X,History,Calendar} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import ForceChangePassword from '@/components/auth/ForceChangePassword';
 import { clsx, type ClassValue } from 'clsx';
@@ -52,6 +52,7 @@ const navItems = [
   { href: '/dashboard/attendance', icon: Clock, label: 'Attendance' },
   { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
   { href: '/dashboard/leaves', icon: Plane, label: 'Leaves' },
+  { href: '/dashboard/holidays', icon: Calendar, label: 'Holidays' },
   { href: '/dashboard/reports', icon: BarChart3, label: 'Reports' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];
