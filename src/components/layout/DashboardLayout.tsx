@@ -2,7 +2,7 @@
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {LayoutDashboard,Users,Clock,FileCheck,Plane,BarChart3,Settings,LogOut,ShieldCheck,Menu,X,History} from 'lucide-react';
+import {LayoutDashboard,Users,Clock,FileCheck,Plane,BarChart3,Settings,LogOut,ShieldCheck,Menu,X,History,Calendar} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import ForceChangePassword from '@/components/auth/ForceChangePassword';
 import { clsx, type ClassValue } from 'clsx';
@@ -52,6 +52,7 @@ const navItems = [
   { href: '/dashboard/attendance', icon: Clock, label: 'Attendance' },
   { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
   { href: '/dashboard/leaves', icon: Plane, label: 'Leaves' },
+  { href: '/dashboard/holidays', icon: Calendar, label: 'Holidays' },
   { href: '/dashboard/reports', icon: BarChart3, label: 'Reports' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];
@@ -141,6 +142,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     logout();
     router.replace('/login');
   };
+
+  // Redirect if not logged in
+  React.useEffect(() => {
+    if (!user && !localStorage.getItem('auth-storage')) {
+      router.replace('/login');
+    }
+  }, [user, router]);
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex">

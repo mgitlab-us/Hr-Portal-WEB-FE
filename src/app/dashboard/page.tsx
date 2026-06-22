@@ -142,12 +142,16 @@ export default function DashboardOverview() {
       };
    }, [user]);
 
-   const today = new Date().toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-   });
+   const [today, setToday] = useState('');
+   
+   useEffect(() => {
+      setToday(new Date().toLocaleDateString('en-US', {
+         weekday: 'long',
+         month: 'long',
+         day: 'numeric',
+         year: 'numeric',
+      }));
+   }, []);
 
    return (
       <DashboardLayout>
