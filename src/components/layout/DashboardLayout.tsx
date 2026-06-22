@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {LayoutDashboard,Users,Clock,FileCheck,Plane,BarChart3,Settings,LogOut,ShieldCheck,Menu,X,History,Calendar} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import ForceChangePassword from '@/components/auth/ForceChangePassword';
+import ClientOnly from '@/components/shared/ClientOnly';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -160,12 +161,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      <ForceChangePassword />
+      <ClientOnly>
+        <ForceChangePassword />
+      </ClientOnly>
 
       {/* ── Desktop Sidebar */}
       <aside className="hidden lg:flex w-56 flex-col bg-slate-50 border-r border-slate-100 sticky top-0 h-screen flex-shrink-0">
-        {/* ── 2. Pass necessary states and actions as props ── */}
-        <Sidebar pathname={pathname} user={user} onLogout={handleLogout} />
+        <ClientOnly>
+          <Sidebar pathname={pathname} user={user} onLogout={handleLogout} />
+        </ClientOnly>
       </aside>
 
       {/* ── Main */}
@@ -218,13 +222,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {/* ── 3. Pass states and the close drawer click action as props ── */}
-              <Sidebar 
-                pathname={pathname} 
-                user={user} 
-                onLogout={handleLogout} 
-                onNavClick={() => setIsMobileMenuOpen(false)} 
-              />
+              <ClientOnly>
+                <Sidebar 
+                  pathname={pathname} 
+                  user={user} 
+                  onLogout={handleLogout} 
+                  onNavClick={() => setIsMobileMenuOpen(false)} 
+                />
+              </ClientOnly>
             </div>
           </div>
         </>
