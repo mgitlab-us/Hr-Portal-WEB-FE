@@ -100,6 +100,7 @@ export default function DashboardOverview() {
       absent: 0,
       late: 0,
       avgWorkHours: '0.0',
+      attendanceChange: null as number | null,
    });
    const [pulse, setPulse] = useState<PulseItem[]>([]);
 
@@ -123,7 +124,7 @@ export default function DashboardOverview() {
 
       const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1').replace(/\/api\/v1$/, '');
       const socket = io(socketUrl, {
-         auth: { companyId: user.companyId },
+         auth: { token: useAuthStore.getState().accessToken },
          transports: ['websocket'],
       });
 
@@ -302,12 +303,7 @@ export default function DashboardOverview() {
                         Average on-time arrival rate this month
                      </p>
 
-                     <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-1.5">
-                        <TrendingUp size={12} className="text-emerald-500" />
-                        <span className="text-xs font-medium text-slate-500">
-                           +4% vs previous cycle
-                        </span>
-                     </div>
+                     <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-1.5">{stats.attendanceChange === null ? (<span className="text-xs font-medium text-slate-400">Monitoring on-time trends...</span>) : stats.attendanceChange >= 0 ? (<><TrendingUp size={12} className="text-emerald-500" /><span className="text-xs font-medium text-emerald-600">+{stats.attendanceChange}% vs last month</span></>) : (<><TrendingUp size={12} className="text-red-400 rotate-180" /><span className="text-xs font-medium text-red-500">{stats.attendanceChange}% vs last month</span></>)}</div>
                   </div>
 
                   {/* Avg Work Hours */}

@@ -1,10 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import {
-  Clock, Save, Loader2, ShieldCheck,
-  Building2, Timer, ChevronDown, Globe, Lock,
-} from 'lucide-react';
+import { Clock, Save, Loader2, ShieldCheck, Building2, Timer, ChevronDown, Globe, Lock, } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -38,7 +35,37 @@ export default function SettingsPage() {
     expectedCheckinHour: 9,
     expectedCheckinMinute: 0,
   });
-  const [profile, setProfile] = useState({ name: '', timezone: 'Asia/Karachi' });
+  const [profile, setProfile] = useState({ 
+    name: '', 
+    timezone: 'Asia/Karachi',
+    officeLat: 24.8607,
+    officeLng: 67.0011,
+    officeRadius: 70
+  });
+
+  const [gettingLocation, setGettingLocation] = useState(false);
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+    setGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setProfile(prev => ({
+          ...prev,
+          officeLat: pos.coords.latitude,
+          officeLng: pos.coords.longitude
+        }));
+        setGettingLocation(false);
+      },
+      (err) => {
+        alert("Failed to get location: " + err.message);
+        setGettingLocation(false);
+      }
+    );
+  };
   const [loading, setLoading] = useState(true);
   const [savingShift, setSavingShift] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -175,6 +202,64 @@ export default function SettingsPage() {
                       <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     </div>
                     <p className="text-[10px] text-slate-400">Determines check-in date boundary and daily reset.</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-50 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck size={12} className="text-indigo-500" />
+                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-tight">Geofence (Office Parameter)</h4>
+                      </div>
+                      <button 
+                         onClick={getCurrentLocation}
+                         disabled={gettingLocation}
+                         className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded transition-colors"
+                      >
+                         {gettingLocation ? 'Locating...' : 'Pin My Location'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Latitude</label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={profile.officeLat}
+                          onChange={(e) => setProfile({ ...profile, officeLat: parseFloat(e.target.value) })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Longitude</label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={profile.officeLng}
+                          onChange={(e) => setProfile({ ...profile, officeLng: parseFloat(e.target.value) })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Alert Radius (Meters)</label>
+                        <div className="flex items-center gap-4">
+                          <input
+                            type="range"
+                            min="10"
+                            max="500"
+                            step="10"
+                            value={profile.officeRadius}
+                            onChange={(e) => setProfile({ ...profile, officeRadius: parseInt(e.target.value) })}
+                            className="flex-1 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <div className="w-16 bg-white border border-slate-200 rounded px-2 py-1 text-center">
+                            <span className="text-xs font-bold text-slate-700">{profile.officeRadius}m</span>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400">HR Admins will be notified if a check-in occurs outside this radius.</p>
+                      </div>
                   </div>
                 </div>
               </div>

@@ -1,19 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import {
-  Clock,
-  Calendar,
-  Search,
-  Download,
-  Loader2,
-  CheckCircle2,
-  Timer,
-  UserMinus,
-  X,
-  FileText,
-  MapPin,
-} from 'lucide-react';
+import { Clock, Calendar, Search, Download, Loader2, CheckCircle2, Timer, UserMinus, X, FileText, MapPin, } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
@@ -360,11 +348,10 @@ export default function AttendanceLogsPage() {
                                   href={`https://www.google.com/maps?q=${log.checkinLat},${log.checkinLng}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
-                                    log.checkinAccuracy && log.checkinAccuracy > 100 
-                                      ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' 
+                                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${log.checkinAccuracy && log.checkinAccuracy > 100
+                                      ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
                                       : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                                  }`}
+                                    }`}
                                   title={`Check-in Location${log.checkinAccuracy ? ` (Accuracy: ${Math.round(log.checkinAccuracy)}m)` : ''}`}
                                 >
                                   <MapPin size={14} />
@@ -381,11 +368,10 @@ export default function AttendanceLogsPage() {
                                   href={`https://www.google.com/maps?q=${log.checkoutLat},${log.checkoutLng}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
-                                    log.checkoutAccuracy && log.checkoutAccuracy > 100 
-                                      ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' 
+                                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${log.checkoutAccuracy && log.checkoutAccuracy > 100
+                                      ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
                                       : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                                  }`}
+                                    }`}
                                   title={`Check-out Location${log.checkoutAccuracy ? ` (Accuracy: ${Math.round(log.checkoutAccuracy)}m)` : ''}`}
                                 >
                                   <MapPin size={14} />
