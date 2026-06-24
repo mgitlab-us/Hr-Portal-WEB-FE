@@ -1,16 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-   BarChart3,
-   Download,
-   Calendar,
-   FileText,
-   Users,
-   TrendingUp,
-   ArrowUpRight,
-   Loader2,
-} from 'lucide-react';
+import { BarChart3, Download, Calendar, FileText, Users, TrendingUp, ArrowUpRight, Loader2, } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 

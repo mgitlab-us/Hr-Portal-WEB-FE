@@ -1,18 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import {
-  CheckCircle2,
-  Calendar,
-  MessageSquare,
-  Loader2,
-  Check,
-  X,
-  Plane,
-  Clock,
-  Briefcase,
-  AlertCircle
-} from 'lucide-react';
+import { CheckCircle2, Calendar, MessageSquare, Loader2, Check, X, Plane, Clock, Briefcase, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
@@ -26,8 +15,8 @@ interface LeaveRequest {
   createdAt: string;
   employee: {
     name: string;
-    profile?: { 
-      employeeCode: string; 
+    profile?: {
+      employeeCode: string;
       department: string;
     };
   };
@@ -143,7 +132,7 @@ export default function LeavesPage() {
                   className="group bg-white border border-slate-100 rounded-xl overflow-hidden hover:shadow-md hover:border-slate-200 transition-all duration-200"
                 >
                   <div className="p-5 flex flex-col lg:flex-row lg:items-center gap-6">
-                    
+
                     {/* Employee Info */}
                     <div className="flex items-center gap-3 lg:w-64 flex-shrink-0">
                       <div

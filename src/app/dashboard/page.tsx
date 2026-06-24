@@ -123,7 +123,7 @@ export default function DashboardOverview() {
 
       const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1').replace(/\/api\/v1$/, '');
       const socket = io(socketUrl, {
-         auth: { companyId: user.companyId },
+         auth: { token: useAuthStore.getState().accessToken },
          transports: ['websocket'],
       });
 

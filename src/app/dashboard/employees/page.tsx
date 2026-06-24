@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, UserX } from 'lucide-react';
+import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, UserX, MoreVertical, Trash2, Power } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -87,6 +87,8 @@ export default function EmployeesPage() {
     shiftProfileId: '',
   });
   const [shifts, setShifts] = useState<any[]>([]);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ type: 'DEACTIVATE' | 'ARCHIVE'; id: string; name: string } | null>(null);
 
   const fetchEmployees = async () => {
     try {
@@ -136,9 +138,19 @@ export default function EmployeesPage() {
   };
 
   const toggleStatus = async (id: string) => {
-    if (!confirm('Are you sure you want to change this employee status?')) return;
+    try {
+      await api.patch(`/employees/${id}/toggle-status`);
+      setConfirmModal(null);
+      fetchEmployees();
+    } catch {
+      alert('Action failed.');
+    }
+  };
+
+  const handleArchive = async (id: string) => {
     try {
       await api.delete(`/employees/${id}`);
+      setConfirmModal(null);
       fetchEmployees();
     } catch {
       alert('Action failed.');
@@ -289,18 +301,47 @@ export default function EmployeesPage() {
                             {emp.profile?.employeeCode || '—'}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5 flex items-center justify-end gap-2 text-right">
+                        <td className="px-5 py-3.5 text-right relative">
                           {emp.role !== 'SUPER_ADMIN' && (
-                            <button
-                              onClick={() => toggleStatus(emp.id)}
-                              className={`p-1.5 rounded-md transition-all ${emp.isActive
-                                  ? 'text-slate-400 hover:text-red-500 hover:bg-red-50'
-                                  : 'text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50'
-                                }`}
-                              title={emp.isActive ? "Deactivate User" : "Activate User"}
-                            >
-                              <UserX size={14} />
-                            </button>
+                            <>
+                              <button
+                                onClick={() => setOpenMenuId(openMenuId === emp.id ? null : emp.id)}
+                                className={`p-1.5 rounded-md transition-all ${openMenuId === emp.id ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                              >
+                                <MoreVertical size={14} />
+                              </button>
+
+                              {openMenuId === emp.id && (
+                                <>
+                                  <div 
+                                    className="fixed inset-0 z-10" 
+                                    onClick={() => setOpenMenuId(null)} 
+                                  />
+                                  <div className="absolute right-12 top-1/2 -translate-y-1/2 z-20 w-48 bg-white border border-slate-100 rounded-lg shadow-xl py-1 overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200">
+                                    <button
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        setConfirmModal({ type: 'DEACTIVATE', id: emp.id, name: emp.name });
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                                    >
+                                      <Power size={12} className={emp.isActive ? 'text-amber-500' : 'text-emerald-500'} />
+                                      {emp.isActive ? 'Deactivate Account' : 'Activate Account'}
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        setConfirmModal({ type: 'ARCHIVE', id: emp.id, name: emp.name });
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                                    >
+                                      <Trash2 size={12} />
+                                      Archive Account (Delete)
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </>
                           )}
                         </td>
                       </tr>
@@ -312,6 +353,41 @@ export default function EmployeesPage() {
           )}
         </div>
       </div>
+
+      {/* ── Confirmation Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${confirmModal.type === 'ARCHIVE' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'}`}>
+                {confirmModal.type === 'ARCHIVE' ? <Trash2 size={24} /> : <ShieldAlert size={24} />}
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">
+                {confirmModal.type === 'ARCHIVE' ? 'Archive Employee?' : 'Change Account Status?'}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2">
+                {confirmModal.type === 'ARCHIVE' 
+                  ? `Are you sure you want to archive ${confirmModal.name}? This will remove them from the active list but keep their historical records.` 
+                  : `Are you sure you want to change the status for ${confirmModal.name}? Deactivated users cannot access their accounts.`}
+              </p>
+            </div>
+            <div className="flex border-t border-slate-100">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors border-r border-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmModal.type === 'ARCHIVE' ? handleArchive(confirmModal.id) : toggleStatus(confirmModal.id)}
+                className={`flex-1 px-4 py-3 text-sm font-bold text-white transition-colors ${confirmModal.type === 'ARCHIVE' ? 'bg-red-500 hover:bg-red-600' : 'bg-slate-800 hover:bg-slate-900'}`}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Add Employee Modal */}
       {isAddModalOpen && (
