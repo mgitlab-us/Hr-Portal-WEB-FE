@@ -2,7 +2,7 @@
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {LayoutDashboard,Users,Clock,FileCheck,Plane,Settings,LogOut,ShieldCheck,Menu,X,History,Calendar} from 'lucide-react';
+import {LayoutDashboard,Users,Clock,FileCheck,Plane,Settings,LogOut,ShieldCheck,Menu,X,History,Calendar,Building2} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import ForceChangePassword from '@/components/auth/ForceChangePassword';
 import ClientOnly from '@/components/shared/ClientOnly';
@@ -46,7 +46,7 @@ const NavItem = ({ href, icon: Icon, label, active, onClick }: NavItemProps) => 
   </Link>
 );
 
-const navItems = [
+const baseNavItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
   { href: '/dashboard/employees', icon: Users, label: 'Employees' },
   { href: '/dashboard/shifts', icon: History, label: 'Shifts' },
@@ -55,6 +55,10 @@ const navItems = [
   { href: '/dashboard/leaves', icon: Plane, label: 'Leaves' },
   { href: '/dashboard/holidays', icon: Calendar, label: 'Holidays' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
+];
+
+const superAdminNavItems = [
+  { href: '/dashboard/departments', icon: Building2, label: 'Departments', superAdminOnly: true },
 ];
 
 // ── 1. Sidebar is now declared completely outside of the main component function ──
@@ -87,7 +91,16 @@ const Sidebar = ({ pathname, user, onLogout, onNavClick }: SidebarProps) => (
       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest px-3 mb-2">
         Menu
       </p>
-      {navItems
+      {(() => {
+        const navItems = user?.role === 'SUPER_ADMIN'
+          ? [
+              ...baseNavItems.slice(0, 2),
+              ...superAdminNavItems,
+              ...baseNavItems.slice(2),
+            ]
+          : baseNavItems;
+
+        return navItems
         .filter(item => {
           if (user?.role === 'SUPER_ADMIN') {
             // Boss monitors Attendance but doesn't handle Corrections or Leaves
@@ -103,7 +116,8 @@ const Sidebar = ({ pathname, user, onLogout, onNavClick }: SidebarProps) => (
             active={pathname === item.href}
             onClick={onNavClick}
           />
-        ))}
+        ));
+      })()}
     </nav>
 
     {/* User + Logout */}
