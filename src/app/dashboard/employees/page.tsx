@@ -14,11 +14,18 @@ interface Employee {
   role: 'EMPLOYEE' | 'ADMIN' | 'SUPER_ADMIN';
   isActive: boolean;
   createdAt: string;
+  departmentId?: string | null;
+  department?: { id: string; name: string } | null;
   profile?: {
     employeeCode: string;
     designation: string;
     department: string;
   };
+}
+
+interface Department {
+  id: string;
+  name: string;
 }
 
 const AVATAR_COLORS = [
@@ -32,6 +39,21 @@ const AVATAR_COLORS = [
 function avatarColor(name: string) {
   const i = (name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % AVATAR_COLORS.length;
   return AVATAR_COLORS[i];
+}
+
+function DepartmentBadge({ name }: { name?: string | null }) {
+  if (!name) {
+    return (
+      <span className="inline-flex text-[10px] font-medium text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
+        Unassigned
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex text-[10px] font-semibold text-sky-700 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded-md">
+      {name}
+    </span>
+  );
 }
 
 function RoleBadge({ role }: { role: Employee['role'] }) {
@@ -74,6 +96,8 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [employeeCodeError, setEmployeeCodeError] = useState<string | null>(null);
@@ -84,6 +108,7 @@ export default function EmployeesPage() {
     role: 'EMPLOYEE',
     designation: '',
     department: '',
+    departmentId: '',
     employeeCode: '',
     shiftProfileId: '',
   });
@@ -110,6 +135,7 @@ export default function EmployeesPage() {
     fetchEmployees();
     fetchPayrollStatus();
     api.get('/shifts').then(res => setShifts(res.data)).catch(() => { });
+    api.get('/departments').then(res => setDepartments(res.data)).catch(() => { });
   }, [user]);
 
   const fetchPayrollStatus = async () => {
@@ -121,12 +147,19 @@ export default function EmployeesPage() {
 
   const filteredEmployees = useMemo(() => {
     return employees.filter(
-      (emp) =>
-        emp.name.toLowerCase().includes(search.toLowerCase()) ||
-        emp.email.toLowerCase().includes(search.toLowerCase()) ||
-        emp.profile?.employeeCode?.toLowerCase().includes(search.toLowerCase())
+      (emp) => {
+        const matchesSearch =
+          emp.name.toLowerCase().includes(search.toLowerCase()) ||
+          emp.email.toLowerCase().includes(search.toLowerCase()) ||
+          emp.profile?.employeeCode?.toLowerCase().includes(search.toLowerCase());
+        const matchesDept =
+          !departmentFilter ||
+          emp.departmentId === departmentFilter ||
+          emp.department?.id === departmentFilter;
+        return matchesSearch && matchesDept;
+      }
     );
-  }, [employees, search]);
+  }, [employees, search, departmentFilter]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,7 +169,7 @@ export default function EmployeesPage() {
       await api.post('/employees', newEmployee);
       setIsAddModalOpen(false);
       fetchEmployees();
-      setNewEmployee({ name: '', email: '', password: '', role: 'EMPLOYEE', designation: '', department: '', employeeCode: '', shiftProfileId: '' });
+      setNewEmployee({ name: '', email: '', password: '', role: 'EMPLOYEE', designation: '', department: '', departmentId: '', employeeCode: '', shiftProfileId: '' });
     } catch (err: any) {
       const msg = err?.response?.data?.message || '';
       if (err?.response?.status === 409 && msg.toLowerCase().includes('code')) {
@@ -221,6 +254,21 @@ export default function EmployeesPage() {
                 </button>
               )}
             </div>
+            {departments.length > 0 && (
+              <div className="relative">
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => setDepartmentFilter(e.target.value)}
+                  className="appearance-none bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                >
+                  <option value="">All departments</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            )}
             <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
               <Users size={12} />
               <span>{filteredEmployees.length} result{filteredEmployees.length !== 1 ? 's' : ''}</span>
@@ -291,9 +339,9 @@ export default function EmployeesPage() {
                           <p className="text-sm text-slate-600">
                             {emp.profile?.designation || '—'}
                           </p>
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            {emp.profile?.department || 'Unassigned'}
-                          </p>
+                          <div className="mt-1">
+                            <DepartmentBadge name={emp.department?.name || emp.profile?.department} />
+                          </div>
                         </td>
                         <td className="px-5 py-3.5 text-center">
                           {emp.isActive ? (
@@ -427,9 +475,160 @@ export default function EmployeesPage() {
       {/* ── Add Employee Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
-          {/* ... existing modal code ... */}
+          <div className="bg-white border border-slate-200 w-full max-w-lg rounded-xl shadow-xl">
+
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">Add Employee</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Register a new organisation member
+                </p>
+              </div>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleCreate} className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Field
+                  label="Full name"
+                  required
+                  value={newEmployee.name}
+                  onChange={set('name')}
+                  placeholder="Jane Smith"
+                />
+                <Field
+                  label="Email address"
+                  required
+                  type="email"
+                  value={newEmployee.email}
+                  onChange={set('email')}
+                  placeholder="jane@company.com"
+                />
+              </div>
+
+              <Field
+                label="Initial password"
+                required
+                type="password"
+                value={newEmployee.password}
+                onChange={set('password')}
+                placeholder="Minimum 6 characters"
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field
+                  label="Designation"
+                  value={newEmployee.designation}
+                  onChange={set('designation')}
+                  placeholder="Software Engineer"
+                />
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-slate-600">Department</label>
+                  <div className="relative">
+                    <select
+                      value={newEmployee.departmentId}
+                      onChange={set('departmentId')}
+                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                    >
+                      <option value="">Unassigned</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Employee Code */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600">Employee ID</label>
+                <input
+                  value={newEmployee.employeeCode}
+                  onChange={(e) => {
+                    setEmployeeCodeError(null);
+                    set('employeeCode')(e);
+                  }}
+                  placeholder="Auto-generated if blank (e.g. ASE-SOF-001)"
+                  className={`w-full bg-white border rounded-lg py-2.5 px-3 text-sm font-mono text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                    employeeCodeError
+                      ? 'border-red-400 ring-red-100 ring-2'
+                      : 'border-slate-200 focus:ring-indigo-500/20 focus:border-indigo-400'
+                  }`}
+                />
+                {employeeCodeError ? (
+                  <p className="text-xs text-red-500 font-medium">{employeeCodeError}</p>
+                ) : (
+                  <p className="text-[10px] text-slate-400 italic">Auto-generated · Format: DES-DEP-001 · You can override this</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Role select */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-slate-600">Role</label>
+                  <div className="relative">
+                    <select
+                      value={newEmployee.role}
+                      onChange={set('role')}
+                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                    >
+                      <option value="EMPLOYEE">Employee</option>
+                      <option value="ADMIN">Admin (HR Manager)</option>
+                    </select>
+                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* Shift select */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-slate-600">Shift Profile</label>
+                  <div className="relative">
+                    <select
+                      value={newEmployee.shiftProfileId}
+                      onChange={set('shiftProfileId')}
+                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                    >
+                      <option value="">Default (Company settings)</option>
+                      {shifts.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex items-center gap-2 px-5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                >
+                  {submitting && <Loader2 size={13} className="animate-spin" />}
+                  Create Employee
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
+
 
       <EmployeeDetailsDrawer 
         isOpen={isDetailsDrawerOpen}
