@@ -68,7 +68,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <p className="font-semibold">Admin Portal</p>
-                <p className="text-sm text-slate-400">Restricted access for organisation admins only.</p>
+                <p className="text-sm text-slate-400">Restricted access for organization admins only.</p>
               </div>
             </div>
             <div className="flex gap-4">

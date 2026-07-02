@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Calendar, Plus, X, Loader2, Trash2, Check, ChevronDown, Info, AlertCircle, } from 'lucide-react';
+import { Calendar, Plus, X, Loader2, Trash2, Info } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { clsx, type ClassValue } from 'clsx';
@@ -44,7 +44,8 @@ export default function HolidaysPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    const init = async () => { await fetchData(); };
+    init();
   }, []);
 
   const handleToggleWeekend = async (dayIndex: number) => {
@@ -73,8 +74,9 @@ export default function HolidaysPage() {
       setIsAddModalOpen(false);
       setNewHoliday({ name: '', date: '' });
       fetchData();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to add holiday');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      alert(e?.response?.data?.message || 'Failed to add holiday');
     } finally {
       setSubmitting(false);
     }
@@ -147,7 +149,7 @@ export default function HolidaysPage() {
           <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-3">
             <Info size={14} className="text-slate-400 mt-0.5" />
             <p className="text-xs text-slate-500 leading-relaxed">
-              Attendance tracking and "Absent" marking will be automatically skipped on these days.
+              Attendance tracking and &ldquo;Absent&rdquo; marking will be automatically skipped on these days.
               The Absentee Engine uses these settings to calculate daily reports.
             </p>
           </div>

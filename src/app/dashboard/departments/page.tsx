@@ -3,10 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   Building2, Plus, X, Loader2, Trash2, Pencil, Users, UserCog, ChevronDown,
+  LayoutGrid, TableProperties,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { DepartmentOrgChart } from '@/components/departments/DepartmentOrgChart';
 import { useRouter } from 'next/navigation';
 
 interface Department {
@@ -23,6 +25,8 @@ interface AdminOption {
   email: string;
 }
 
+const COMPANY_NAME = 'TapIn';
+
 export default function DepartmentsPage() {
   const { user } = useAuthStore();
   const router = useRouter();
@@ -33,6 +37,7 @@ export default function DepartmentsPage() {
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; dept?: Department } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
   const [form, setForm] = useState({ name: '', adminId: '' });
+  const [view, setView] = useState<'chart' | 'table'>('chart');
 
   useEffect(() => {
     if (user && user.role !== 'SUPER_ADMIN') {
@@ -48,11 +53,9 @@ export default function DepartmentsPage() {
       ]);
       setDepartments(deptRes.data);
       setAdmins(
-        empRes.data.filter((e: { role: string }) => e.role === 'ADMIN').map((e: AdminOption) => ({
-          id: e.id,
-          name: e.name,
-          email: e.email,
-        }))
+        (empRes.data as Array<{ id: string; name: string; email: string; role: string }>)
+          .filter((e) => e.role === 'ADMIN')
+          .map((e) => ({ id: e.id, name: e.name, email: e.email }))
       );
     } catch (err) {
       console.error('Failed to fetch departments:', err);
@@ -63,7 +66,8 @@ export default function DepartmentsPage() {
 
   useEffect(() => {
     if (user?.role === 'SUPER_ADMIN' && !user?.mustChangePassword) {
-      fetchData();
+      const init = async () => { await fetchData(); };
+      init();
     }
   }, [user]);
 
@@ -96,8 +100,9 @@ export default function DepartmentsPage() {
       }
       setModal(null);
       fetchData();
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Operation failed');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      alert(e?.response?.data?.message || 'Operation failed');
     } finally {
       setSubmitting(false);
     }
@@ -110,8 +115,9 @@ export default function DepartmentsPage() {
       await api.delete(`/departments/${deleteTarget.id}`);
       setDeleteTarget(null);
       fetchData();
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to delete department');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      alert(e?.response?.data?.message || 'Failed to delete department');
     } finally {
       setSubmitting(false);
     }
@@ -134,13 +140,38 @@ export default function DepartmentsPage() {
               Create departments and assign HR admins to manage them
             </p>
           </div>
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-          >
-            <Plus size={14} />
-            Add Department
-          </button>
+          <div className="flex items-center flex-wrap gap-2">
+            {/* Chart / table view toggle */}
+            <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-lg">
+              <button
+                onClick={() => setView('chart')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  view === 'chart' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+                aria-pressed={view === 'chart'}
+              >
+                <LayoutGrid size={13} />
+                Chart
+              </button>
+              <button
+                onClick={() => setView('table')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  view === 'table' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+                aria-pressed={view === 'table'}
+              >
+                <TableProperties size={13} />
+                Table
+              </button>
+            </div>
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            >
+              <Plus size={14} />
+              Add Department
+            </button>
+          </div>
         </div>
 
         <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
@@ -156,6 +187,14 @@ export default function DepartmentsPage() {
                 Create your first department
               </button>
             </div>
+          ) : view === 'chart' ? (
+            <DepartmentOrgChart
+              companyName={COMPANY_NAME}
+              departments={departments}
+              onAddDepartment={openCreate}
+              onEditDepartment={openEdit}
+              onDeleteDepartment={setDeleteTarget}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">

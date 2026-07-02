@@ -1,9 +1,17 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Clock, Calendar, Search, Download, Loader2, CheckCircle2, Timer, UserMinus, X, FileText, MapPin, } from 'lucide-react';
+import { Clock, Calendar, Search, Download, Loader2, CheckCircle2, Timer, UserMinus, X, FileText, MapPin, ArrowRight, } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+
+// ── Same two-tone system as the overview dashboard — teal for on-track, coral for attention-needed.
+const TONES = {
+  teal: { bg: '#E1F5EE', chip: '#9FE1CB', icon: '#0F6E56', accent: '#1D9E75', dark: '#04342C' },
+  coral: { bg: '#FAECE7', chip: '#F0997B', icon: '#993C1D', accent: '#D85A30', dark: '#4A1B0C' },
+} as const;
+
+type Tone = keyof typeof TONES;
 
 interface AttendanceLog {
   id: string;
@@ -23,58 +31,62 @@ interface AttendanceLog {
   color: string;
 }
 
-const AVATAR_COLORS = [
-  { bg: '#ECEFFE', text: '#5B6EF5' },
-  { bg: '#E0F7F1', text: '#0D9E7A' },
-  { bg: '#FEF6E4', text: '#D97706' },
-  { bg: '#F4EFFE', text: '#8B5CF6' },
-  { bg: '#FEE9ED', text: '#E8405A' },
-  { bg: '#E0F0FF', text: '#2563EB' },
-];
-function avatarColor(name: string) {
-  const i = (name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % AVATAR_COLORS.length;
-  return AVATAR_COLORS[i];
+// ── Identity color for the avatar — alternates teal/coral by name, purely for
+// telling rows apart at a glance. Status still lives in the badge, not here.
+function avatarTone(name: string): Tone {
+  const i = (name?.charCodeAt(0) || 0) + (name?.charCodeAt(1) || 0);
+  return i % 2 === 0 ? 'teal' : 'coral';
 }
 
 function StatusBadge({ status }: { status: string }) {
   const s = status?.toUpperCase();
   if (s === 'PRESENT' || s === 'ON-TIME')
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
+      <span
+        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide"
+        style={{ color: TONES.teal.icon, backgroundColor: TONES.teal.bg }}
+      >
         <CheckCircle2 size={9} /> On time
       </span>
     );
   if (s === 'LATE')
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
+      <span
+        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide"
+        style={{ color: TONES.coral.icon, backgroundColor: TONES.coral.bg }}
+      >
         <Timer size={9} /> Late
       </span>
     );
   if (s === 'ABSENT')
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
+      <span
+        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide"
+        style={{ color: TONES.coral.icon, backgroundColor: TONES.coral.bg }}
+      >
         <UserMinus size={9} /> Absent
       </span>
     );
   return (
-    <span className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
+    <span className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-full uppercase tracking-wide">
       {status}
     </span>
   );
 }
 
 function StatCard({
-  label, value, icon: Icon, accent,
+  label, value, icon: Icon, tone,
 }: {
-  label: string; value: number; icon: React.ElementType; accent: string;
+  label: string; value: number; icon: React.ElementType; tone: Tone;
 }) {
+  const t = TONES[tone];
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-5 flex items-center gap-4">
+    <div className="bg-white border border-slate-100 rounded-2xl p-5 flex items-center gap-4">
       <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ backgroundColor: `${accent}14` }}
+        className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
+        style={{ backgroundColor: t.bg }}
       >
-        <Icon size={14} style={{ color: accent }} />
+        <Icon size={15} style={{ color: t.icon }} />
       </div>
       <div>
         <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">
@@ -88,6 +100,35 @@ function StatCard({
   );
 }
 
+// ── One rounded pin button used for both check-in and check-out location.
+function LocationPin({
+  lat, lng, accuracy, label,
+}: {
+  lat?: number; lng?: number; accuracy?: number; label: string;
+}) {
+  if (!lat || !lng) {
+    return (
+      <span className="w-7 h-7 rounded-full flex items-center justify-center text-slate-300" title={`No GPS for ${label}`}>
+        <MapPin size={13} />
+      </span>
+    );
+  }
+  const imprecise = !!accuracy && accuracy > 100;
+  const tone = imprecise ? TONES.coral : TONES.teal;
+  return (
+    <a
+      href={`https://www.google.com/maps?q=${lat},${lng}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:opacity-80"
+      style={{ backgroundColor: tone.bg, color: tone.icon }}
+      title={`${label}${accuracy ? ` · accuracy ${Math.round(accuracy)}m` : ''}`}
+    >
+      <MapPin size={13} />
+    </a>
+  );
+}
+
 export default function AttendanceLogsPage() {
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,20 +136,31 @@ export default function AttendanceLogsPage() {
   const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
 
-  const fetchLogs = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get(`/attendance/logs/daily?date=${date}`);
-      setLogs(res.data);
-    } catch (err) {
-      console.error('Failed to fetch logs:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Fetch is defined inline inside the effect (rather than calling out to a
+  // component-scope function) so the setState calls that happen before the
+  // first `await` are recognized as effect-local and don't trip
+  // react-hooks/set-state-in-effect. `discarded` guards against a stale
+  // response overwriting a newer one if the date changes again mid-request.
   useEffect(() => {
-    fetchLogs();
+    let discarded = false;
+
+    const loadLogs = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get(`/attendance/logs/daily?date=${date}`);
+        if (!discarded) setLogs(res.data);
+      } catch (err) {
+        if (!discarded) console.error('Failed to fetch logs:', err);
+      } finally {
+        if (!discarded) setLoading(false);
+      }
+    };
+
+    loadLogs();
+
+    return () => {
+      discarded = true;
+    };
   }, [date]);
 
   const handleExport = async (type: 'pdf' | 'excel') => {
@@ -152,7 +204,8 @@ export default function AttendanceLogsPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 lg:p-8 space-y-6">
+      <div className="p-6 lg:p-8">
+        <div className="max-w-[1440px] mx-auto space-y-6">
 
         {/* ── Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -168,19 +221,20 @@ export default function AttendanceLogsPage() {
 
           {/* Controls */}
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
-              <Calendar size={13} className="text-slate-400" />
+            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm">
+              <Calendar size={13} className="text-slate-400 flex-shrink-0" />
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="bg-transparent text-slate-700 text-sm focus:outline-none"
+                style={{ colorScheme: 'light' }}
+                className="bg-transparent text-slate-700 text-sm focus:outline-none border-0"
               />
             </div>
             <button
               onClick={() => handleExport('excel')}
               disabled={!!exporting}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
             >
               {exporting === 'excel'
                 ? <Loader2 size={13} className="animate-spin" />
@@ -190,7 +244,7 @@ export default function AttendanceLogsPage() {
             <button
               onClick={() => handleExport('pdf')}
               disabled={!!exporting}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50 shadow-sm"
             >
               {exporting === 'pdf'
                 ? <Loader2 size={13} className="animate-spin" />
@@ -202,13 +256,13 @@ export default function AttendanceLogsPage() {
 
         {/* ── Stats */}
         <div className="grid grid-cols-3 gap-4">
-          <StatCard label="Present" value={present} icon={CheckCircle2} accent="#0D9E7A" />
-          <StatCard label="Late arrivals" value={late} icon={Timer} accent="#F59E0B" />
-          <StatCard label="Absent" value={absent} icon={UserMinus} accent="#E8405A" />
+          <StatCard label="Present" value={present} icon={CheckCircle2} tone="teal" />
+          <StatCard label="Late arrivals" value={late} icon={Timer} tone="coral" />
+          <StatCard label="Absent" value={absent} icon={UserMinus} tone="coral" />
         </div>
 
         {/* ── Table Card */}
-        <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
 
           {/* Toolbar */}
           <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
@@ -219,7 +273,7 @@ export default function AttendanceLogsPage() {
                 placeholder="Search staff name or ID…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]/15 focus:border-[#1D9E75]/40 transition-all"
               />
               {search && (
                 <button
@@ -236,38 +290,39 @@ export default function AttendanceLogsPage() {
             </div>
           </div>
 
-          {/* Table */}
+          {/* Table — fixed layout with percentage columns so it always fits the
+              card width instead of growing wider than the screen. Check-in/out
+              and the two location pins are each consolidated into a single
+              column to keep the column count (and total width) down. */}
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 size={20} className="text-slate-400 animate-spin" />
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left table-fixed border-collapse">
+                <colgroup>
+                  <col style={{ width: '32%' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '24%' }} />
+                  <col style={{ width: '16%' }} />
+                  <col style={{ width: '14%' }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-50/70 border-b border-slate-100">
-                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                    <th className="px-4 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
                       Staff Member
                     </th>
-                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
+                    <th className="px-4 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
                       Status
                     </th>
-                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                      Check-in
+                    <th className="px-4 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                      Check-in → out
                     </th>
-                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                      Check-out
+                    <th className="px-4 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
+                      Location
                     </th>
-                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest hidden lg:table-cell">
-                      Duration
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
-                      In Location
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
-                      Out Location
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-right">
+                    <th className="px-4 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-right">
                       Actions
                     </th>
                   </tr>
@@ -284,7 +339,7 @@ export default function AttendanceLogsPage() {
                     </tr>
                   ) : (
                     filteredLogs.map((log) => {
-                      const av = avatarColor(log.name);
+                      const tone = TONES[avatarTone(log.name)];
 
                       // Compute duration
                       let duration = '—';
@@ -305,83 +360,54 @@ export default function AttendanceLogsPage() {
                           key={log.id}
                           className="hover:bg-slate-50/60 transition-colors group"
                         >
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-3 min-w-0">
                               <div
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold flex-shrink-0"
-                                style={{ backgroundColor: av.bg, color: av.text }}
+                                className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+                                style={{ backgroundColor: tone.bg, color: tone.icon }}
                               >
                                 {log.name.charAt(0).toUpperCase()}
                               </div>
-                              <div>
-                                <p className="text-sm font-medium text-slate-700">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-slate-700 truncate">
                                   {log.name}
                                 </p>
-                                <p className="text-xs text-slate-400 mt-0.5">
+                                <p className="text-xs text-slate-400 mt-0.5 truncate">
                                   {log.designation || '—'}
                                 </p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-5 py-3.5 text-center">
+                          <td className="px-4 py-3.5 text-center">
                             <StatusBadge status={log.status} />
                           </td>
-                          <td className="px-5 py-3.5">
-                            <p className="text-sm font-medium text-slate-700 tabular-nums">
-                              {log.checkin || '—'}
-                            </p>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <p className="text-sm font-medium text-slate-700 tabular-nums">
-                              {log.checkout || '—'}
-                            </p>
-                          </td>
-                          <td className="px-5 py-3.5 hidden lg:table-cell">
-                            <p className="text-sm text-slate-500 tabular-nums">
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700 tabular-nums whitespace-nowrap">
+                              <span>{log.checkin || '—'}</span>
+                              <ArrowRight size={11} className="text-slate-300 flex-shrink-0" />
+                              <span>{log.checkout || '—'}</span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
                               {duration}
                             </p>
                           </td>
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center justify-center">
-                              {log.checkinLat && log.checkinLng ? (
-                                <a
-                                  href={`https://www.google.com/maps?q=${log.checkinLat},${log.checkinLng}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${log.checkinAccuracy && log.checkinAccuracy > 100
-                                      ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
-                                      : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                                    }`}
-                                  title={`Check-in Location${log.checkinAccuracy ? ` (Accuracy: ${Math.round(log.checkinAccuracy)}m)` : ''}`}
-                                >
-                                  <MapPin size={14} />
-                                </a>
-                              ) : (
-                                <span className="text-[10px] text-slate-300 italic">No GPS</span>
-                              )}
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center justify-center gap-2">
+                              <LocationPin
+                                lat={log.checkinLat}
+                                lng={log.checkinLng}
+                                accuracy={log.checkinAccuracy}
+                                label="Check-in location"
+                              />
+                              <LocationPin
+                                lat={log.checkoutLat}
+                                lng={log.checkoutLng}
+                                accuracy={log.checkoutAccuracy}
+                                label="Check-out location"
+                              />
                             </div>
                           </td>
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center justify-center">
-                              {log.checkoutLat && log.checkoutLng ? (
-                                <a
-                                  href={`https://www.google.com/maps?q=${log.checkoutLat},${log.checkoutLng}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${log.checkoutAccuracy && log.checkoutAccuracy > 100
-                                      ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
-                                      : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                                    }`}
-                                  title={`Check-out Location${log.checkoutAccuracy ? ` (Accuracy: ${Math.round(log.checkoutAccuracy)}m)` : ''}`}
-                                >
-                                  <MapPin size={14} />
-                                </a>
-                              ) : (
-                                <span className="text-[10px] text-slate-300 italic">No GPS</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3.5 text-right">
+                          <td className="px-4 py-3.5 text-right">
                             <button
                               onClick={async () => {
                                 try {
@@ -402,7 +428,10 @@ export default function AttendanceLogsPage() {
                                   alert('Failed to download report.');
                                 }
                               }}
-                              className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                              className="p-1.5 rounded-lg text-slate-400 transition-all hover:opacity-80"
+                              style={{ color: undefined }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = TONES.teal.icon; e.currentTarget.style.backgroundColor = TONES.teal.bg; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = ''; e.currentTarget.style.backgroundColor = ''; }}
                               title="Download Monthly Report"
                             >
                               <FileText size={14} />
@@ -416,6 +445,8 @@ export default function AttendanceLogsPage() {
               </table>
             </div>
           )}
+        </div>
+
         </div>
       </div>
     </DashboardLayout>

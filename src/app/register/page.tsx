@@ -117,7 +117,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-slate-800">Create Organisation</h2>
+            <h2 className="text-2xl font-bold text-slate-800">Create Organization</h2>
             <p className="text-sm text-slate-500 mt-1">Get started with your company profile today.</p>
           </div>
 

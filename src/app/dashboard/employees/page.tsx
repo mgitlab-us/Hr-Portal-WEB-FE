@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, UserX, MoreVertical, Trash2, Power, DollarSign } from 'lucide-react';
+import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, MoreVertical, Trash2, Power, DollarSign } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -26,6 +26,17 @@ interface Employee {
 interface Department {
   id: string;
   name: string;
+  admin?: { id: string; name: string; email: string } | null;
+}
+
+interface ShiftProfile {
+  id: string;
+  name: string;
+}
+
+interface PayrollStatusRecord {
+  id: string;
+  payment?: { status: 'PAID' | 'PENDING' } | null;
 }
 
 const AVATAR_COLORS = [
@@ -112,12 +123,21 @@ export default function EmployeesPage() {
     employeeCode: '',
     shiftProfileId: '',
   });
-  const [shifts, setShifts] = useState<any[]>([]);
+  const [shifts, setShifts] = useState<ShiftProfile[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ type: 'DEACTIVATE' | 'ARCHIVE'; id: string; name: string } | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [isDetailsDrawerOpen, setIsDetailsDrawerOpen] = useState(false);
-  const [payrollStatus, setPayrollStatus] = useState<any[]>([]);
+  const [payrollStatus, setPayrollStatus] = useState<PayrollStatusRecord[]>([]);
+
+  const canManageEmployee = (emp: Employee) => {
+    if (user?.role === 'SUPER_ADMIN') return true;
+    if (user?.role === 'ADMIN') {
+      const myDept = departments.find((d: Department) => d.admin?.id === user?.id);
+      return !!myDept && (emp.departmentId === myDept.id || emp.department?.id === myDept.id);
+    }
+    return false;
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -130,20 +150,31 @@ export default function EmployeesPage() {
     }
   };
 
-  useEffect(() => {
-    if (user?.mustChangePassword) return;
-    fetchEmployees();
-    fetchPayrollStatus();
-    api.get('/shifts').then(res => setShifts(res.data)).catch(() => { });
-    api.get('/departments').then(res => setDepartments(res.data)).catch(() => { });
-  }, [user]);
-
   const fetchPayrollStatus = async () => {
     try {
       const res = await api.get('/salary/status');
       setPayrollStatus(res.data);
     } catch { }
   };
+
+  useEffect(() => {
+    if (user?.mustChangePassword) return;
+    const init = async () => {
+      await fetchEmployees();
+      await fetchPayrollStatus();
+      api.get('/shifts').then(res => setShifts(res.data)).catch(() => { });
+      api.get('/departments').then(res => {
+        setDepartments(res.data);
+        if (user?.role === 'ADMIN') {
+          const myDept = (res.data as Department[]).find((d) => d.admin?.id === user?.id);
+          if (myDept) {
+            setDepartmentFilter(myDept.id);
+          }
+        }
+      }).catch(() => { });
+    };
+    init();
+  }, [user]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter(
@@ -170,9 +201,10 @@ export default function EmployeesPage() {
       setIsAddModalOpen(false);
       fetchEmployees();
       setNewEmployee({ name: '', email: '', password: '', role: 'EMPLOYEE', designation: '', department: '', departmentId: '', employeeCode: '', shiftProfileId: '' });
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || '';
-      if (err?.response?.status === 409 && msg.toLowerCase().includes('code')) {
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { message?: string } } };
+      const msg = e?.response?.data?.message || '';
+      if (e?.response?.status === 409 && msg.toLowerCase().includes('code')) {
         setEmployeeCodeError('This Employee ID is already in use. Please edit the ID field below.');
       } else {
         alert(msg || 'Failed to create employee. Please check if email is unique.');
@@ -400,27 +432,31 @@ export default function EmployeesPage() {
                                       <FileText size={12} className="text-indigo-500" />
                                       View Full Profile
                                     </button>
-                                    <hr className="my-1 border-slate-50" />
-                                    <button
-                                      onClick={() => {
-                                        setOpenMenuId(null);
-                                        setConfirmModal({ type: 'DEACTIVATE', id: emp.id, name: emp.name });
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                                    >
-                                      <Power size={12} className={emp.isActive ? 'text-amber-500' : 'text-emerald-500'} />
-                                      {emp.isActive ? 'Deactivate Account' : 'Activate Account'}
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setOpenMenuId(null);
-                                        setConfirmModal({ type: 'ARCHIVE', id: emp.id, name: emp.name });
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
-                                    >
-                                      <Trash2 size={12} />
-                                      Archive Account (Delete)
-                                    </button>
+                                    {canManageEmployee(emp) && (
+                                      <>
+                                        <hr className="my-1 border-slate-50" />
+                                        <button
+                                          onClick={() => {
+                                            setOpenMenuId(null);
+                                            setConfirmModal({ type: 'DEACTIVATE', id: emp.id, name: emp.name });
+                                          }}
+                                          className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                                        >
+                                          <Power size={12} className={emp.isActive ? 'text-amber-500' : 'text-emerald-500'} />
+                                          {emp.isActive ? 'Deactivate Account' : 'Activate Account'}
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setOpenMenuId(null);
+                                            setConfirmModal({ type: 'ARCHIVE', id: emp.id, name: emp.name });
+                                          }}
+                                          className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                                        >
+                                          <Trash2 size={12} />
+                                          Archive Account (Delete)
+                                        </button>
+                                      </>
+                                    )}
                                   </div>
                                 </>
                               )}
@@ -638,6 +674,7 @@ export default function EmployeesPage() {
           fetchPayrollStatus();
         }}
         employeeId={selectedEmployeeId}
+        canManage={selectedEmployeeId ? canManageEmployee(employees.find(e => e.id === selectedEmployeeId)!) : false}
       />
     </DashboardLayout>
   );

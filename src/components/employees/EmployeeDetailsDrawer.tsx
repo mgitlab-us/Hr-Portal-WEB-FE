@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Briefcase, CreditCard, History, CheckCircle2, AlertCircle, Loader2, DollarSign, Building2, Landmark, Save } from 'lucide-react';
+import { X, User, CreditCard, History, CheckCircle2, AlertCircle, Loader2, DollarSign, Building2, Landmark, Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { format } from 'date-fns';
 
@@ -12,6 +12,8 @@ interface Employee {
   email: string;
   isActive: boolean;
   createdAt: string;
+  departmentId?: string | null;
+  shiftProfileId?: string | null;
   profile?: {
     employeeCode: string;
     designation: string;
@@ -36,12 +38,25 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   employeeId: string | null;
+  canManage: boolean;
 }
 
-export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId }: Props) {
+interface DepartmentOption {
+  id: string;
+  name: string;
+}
+
+interface ShiftOption {
+  id: string;
+  name: string;
+}
+
+export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId, canManage }: Props) {
   const [activeTab, setActiveTab] = useState<'overview' | 'salary' | 'attendance'>('overview');
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [shifts, setShifts] = useState<ShiftOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -52,19 +67,24 @@ export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId }: P
     bankName: '',
     accountNumber: '',
     designation: '',
-    department: ''
+    departmentId: '',
+    shiftProfileId: ''
   });
 
   const fetchData = async () => {
     if (!employeeId) return;
     setLoading(true);
     try {
-      const [empRes, salaryRes] = await Promise.all([
+      const [empRes, salaryRes, deptsRes, shiftsRes] = await Promise.all([
         api.get(`/employees/${employeeId}`),
-        api.get(`/salary/${employeeId}/history`).catch(() => ({ data: [] }))
+        api.get(`/salary/${employeeId}/history`).catch(() => ({ data: [] })),
+        api.get('/departments').catch(() => ({ data: [] })),
+        api.get('/shifts').catch(() => ({ data: [] }))
       ]);
       setEmployee(empRes.data);
       setPayments(salaryRes.data);
+      setDepartments(deptsRes.data || []);
+      setShifts(shiftsRes.data || []);
       
       const p = empRes.data.profile;
       setEditInfo({
@@ -72,10 +92,11 @@ export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId }: P
         bankName: p?.bankName || '',
         accountNumber: p?.accountNumber || '',
         designation: p?.designation || '',
-        department: p?.department || ''
+        departmentId: empRes.data.departmentId || '',
+        shiftProfileId: empRes.data.shiftProfileId || ''
       });
-    } catch (err) {
-      console.error('Failed to load employee details:', err);
+    } catch {
+      console.error('Failed to load employee details');
     } finally {
       setLoading(false);
     }
@@ -83,25 +104,26 @@ export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId }: P
 
   useEffect(() => {
     if (isOpen && employeeId) {
-      fetchData();
+      const init = async () => { await fetchData(); };
+      init();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, employeeId]);
 
   const handleUpdateProfile = async () => {
     if (!employeeId) return;
     setSaving(true);
     try {
-      // Assuming existing employee update endpoint supports these fields
-      // or we might need a specific profile update endpoint
       await api.patch(`/employees/${employeeId}`, {
         designation: editInfo.designation,
-        department: editInfo.department,
+        departmentId: editInfo.departmentId || null,
+        shiftProfileId: editInfo.shiftProfileId || null,
         baseSalary: parseFloat(editInfo.baseSalary) || 0,
         bankName: editInfo.bankName,
         accountNumber: editInfo.accountNumber
       });
       fetchData();
-    } catch (err) {
+    } catch {
       alert('Failed to update employee information');
     } finally {
       setSaving(false);
@@ -123,7 +145,7 @@ export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId }: P
         amount: parseFloat(editInfo.baseSalary)
       });
       fetchData();
-    } catch (err) {
+    } catch {
       alert('Failed to record payment');
     } finally {
       setPaying(false);
@@ -188,14 +210,16 @@ export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId }: P
                   {/* Tabs */}
                   <div className="px-6 border-b border-slate-100 bg-slate-50/20">
                     <div className="flex gap-8">
-                      {[
-                        { id: 'overview', icon: User, label: 'Overview' },
-                        { id: 'salary', icon: DollarSign, label: 'Payroll' },
-                        { id: 'attendance', icon: History, label: 'Logs' }
-                      ].map(tab => (
+                      {(
+                        [
+                          { id: 'overview' as const, icon: User, label: 'Overview' },
+                          ...(canManage ? [{ id: 'salary' as const, icon: DollarSign, label: 'Payroll' }] : []),
+                          { id: 'attendance' as const, icon: History, label: 'Logs' }
+                        ] as Array<{ id: 'overview' | 'salary' | 'attendance'; icon: React.ElementType; label: string }>
+                      ).map(tab => (
                         <button
                           key={tab.id}
-                          onClick={() => setActiveTab(tab.id as any)}
+                          onClick={() => setActiveTab(tab.id)}
                           className={`flex items-center gap-2 py-4 text-xs font-bold transition-all relative ${
                             activeTab === tab.id ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
                           }`}
@@ -236,81 +260,124 @@ export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId }: P
                             <input 
                               value={editInfo.designation} 
                               onChange={e => setEditInfo(p => ({ ...p, designation: e.target.value }))}
-                              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none" 
+                              disabled={!canManage}
+                              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50 disabled:text-slate-400" 
                             />
                           </div>
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Department</label>
-                            <input 
-                              value={editInfo.department} 
-                              onChange={e => setEditInfo(p => ({ ...p, department: e.target.value }))}
-                              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none" 
-                            />
-                          </div>
-                        </div>
-
-                        <hr className="border-slate-100" />
-
-                        {/* Payroll Settings */}
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2 mb-1">
-                            <CreditCard size={14} className="text-indigo-500" />
-                            <h3 className="text-sm font-bold text-slate-800">Bank & Payroll Details</h3>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Base Salary (PKR)</label>
-                              <div className="relative">
-                                <DollarSign size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input 
-                                  type="number"
-                                  value={editInfo.baseSalary} 
-                                  onChange={e => setEditInfo(p => ({ ...p, baseSalary: e.target.value }))}
-                                  className="w-full text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none"
-                                  placeholder="0.00"
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Bank Name</label>
-                              <div className="relative">
-                                <Building2 size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input 
-                                  value={editInfo.bankName} 
-                                  onChange={e => setEditInfo(p => ({ ...p, bankName: e.target.value }))}
-                                  className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-indigo-400 transition-all"
-                                  placeholder="e.g. HBL, Alfalah..."
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Account Number (IBAN)</label>
-                            <div className="relative">
-                              <Landmark size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            {canManage ? (
+                              <select
+                                value={editInfo.departmentId}
+                                onChange={e => setEditInfo(p => ({ ...p, departmentId: e.target.value }))}
+                                className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none"
+                              >
+                                <option value="">Unassigned</option>
+                                {departments.map((d) => (
+                                  <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                              </select>
+                            ) : (
                               <input 
-                                value={editInfo.accountNumber} 
-                                onChange={e => setEditInfo(p => ({ ...p, accountNumber: e.target.value }))}
-                                className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-indigo-400 transition-all"
-                                placeholder="Bank account or IBAN"
+                                value={departments.find(d => d.id === editInfo.departmentId)?.name || 'Unassigned'} 
+                                disabled
+                                className="w-full text-sm font-medium text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none" 
                               />
-                            </div>
+                            )}
                           </div>
                         </div>
 
-                        {/* Save Action */}
-                        <div className="pt-2">
-                          <button
-                            onClick={handleUpdateProfile}
-                            disabled={saving}
-                            className="w-full inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold py-2.5 rounded-lg transition-all shadow-lg shadow-slate-100 disabled:opacity-50"
-                          >
-                            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                            Update Enterprise Record
-                          </button>
+                        {/* Shift Profile (Requirement 1) */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Shift Profile</label>
+                            {canManage ? (
+                              <select
+                                value={editInfo.shiftProfileId}
+                                onChange={e => setEditInfo(p => ({ ...p, shiftProfileId: e.target.value }))}
+                                className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none"
+                              >
+                                <option value="">Default (Company settings)</option>
+                                {shifts.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input 
+                                value={shifts.find(s => s.id === editInfo.shiftProfileId)?.name || 'Default (Company settings)'} 
+                                disabled
+                                className="w-full text-sm font-medium text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none" 
+                              />
+                            )}
+                          </div>
                         </div>
+
+                        {canManage && (
+                          <>
+                            <hr className="border-slate-100" />
+
+                            {/* Payroll Settings */}
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                <CreditCard size={14} className="text-indigo-500" />
+                                <h3 className="text-sm font-bold text-slate-800">Bank & Payroll Details</h3>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Base Salary (PKR)</label>
+                                  <div className="relative">
+                                    <DollarSign size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input 
+                                      type="number"
+                                      value={editInfo.baseSalary} 
+                                      onChange={e => setEditInfo(p => ({ ...p, baseSalary: e.target.value }))}
+                                      className="w-full text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Bank Name</label>
+                                  <div className="relative">
+                                    <Building2 size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input 
+                                      value={editInfo.bankName} 
+                                      onChange={e => setEditInfo(p => ({ ...p, bankName: e.target.value }))}
+                                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-indigo-400 transition-all"
+                                      placeholder="e.g. HBL, Alfalah..."
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Account Number (IBAN)</label>
+                                <div className="relative">
+                                  <Landmark size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                  <input 
+                                    value={editInfo.accountNumber} 
+                                    onChange={e => setEditInfo(p => ({ ...p, accountNumber: e.target.value }))}
+                                    className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-indigo-400 transition-all"
+                                    placeholder="Bank account or IBAN"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Save Action */}
+                            <div className="pt-2">
+                              <button
+                                onClick={handleUpdateProfile}
+                                disabled={saving}
+                                className="w-full inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold py-2.5 rounded-lg transition-all shadow-lg shadow-slate-100 disabled:opacity-50"
+                              >
+                                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                                Update Record
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
 

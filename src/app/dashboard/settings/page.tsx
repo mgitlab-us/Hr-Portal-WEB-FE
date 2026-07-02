@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Clock, Save, Loader2, ShieldCheck, Building2, Timer, ChevronDown, Globe, Lock, } from 'lucide-react';
+import { Clock, Save, Loader2, ShieldCheck, Building2, Timer, ChevronDown, Globe, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -35,37 +35,38 @@ export default function SettingsPage() {
     expectedCheckinHour: 9,
     expectedCheckinMinute: 0,
   });
-  const [profile, setProfile] = useState({ 
-    name: '', 
+  const [profile, setProfile] = useState({
+    name: '',
     timezone: 'Asia/Karachi',
     officeLat: 24.8607,
     officeLng: 67.0011,
-    officeRadius: 70
+    officeRadius: 70,
   });
 
   const [gettingLocation, setGettingLocation] = useState(false);
 
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
+      alert('Geolocation is not supported by your browser');
       return;
     }
     setGettingLocation(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setProfile(prev => ({
+        setProfile((prev) => ({
           ...prev,
           officeLat: pos.coords.latitude,
-          officeLng: pos.coords.longitude
+          officeLng: pos.coords.longitude,
         }));
         setGettingLocation(false);
       },
       (err) => {
-        alert("Failed to get location: " + err.message);
+        alert('Failed to get location: ' + err.message);
         setGettingLocation(false);
       }
     );
   };
+
   const [loading, setLoading] = useState(true);
   const [savingShift, setSavingShift] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -124,7 +125,7 @@ export default function SettingsPage() {
 
   if (user?.role !== 'SUPER_ADMIN') return (
     <DashboardLayout>
-      <div className="h-[60vh] flex flex-col items-center justify-center gap-3 text-center">
+      <div className="h-[60vh] flex flex-col items-center justify-center gap-3 text-center px-6">
         <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">
           <Lock size={15} className="text-red-500" />
         </div>
@@ -141,18 +142,14 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-slate-50 p-6 lg:p-8 space-y-6">
+      <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 space-y-6">
 
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Admin · Settings</p>
-            <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Organisation Settings</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold text-slate-800 tracking-tight">Organisation Settings</h1>
             <p className="text-sm text-slate-400 mt-0.5">Configure shift rules and company profile</p>
-          </div>
-          <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-lg px-3 py-2">
-            <ShieldCheck size={11} className="text-indigo-500" />
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Super Admin</span>
           </div>
         </div>
 
@@ -161,7 +158,9 @@ export default function SettingsPage() {
             <Loader2 size={16} className="text-slate-400 animate-spin" />
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto space-y-6">
+          <div className="max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+
+            {/* ── Company Profile */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Building2 size={13} className="text-slate-400" />
@@ -205,21 +204,21 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="pt-4 border-t border-slate-50 space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <ShieldCheck size={12} className="text-indigo-500" />
                         <h4 className="text-xs font-bold text-slate-700 uppercase tracking-tight">Geofence (Office Parameter)</h4>
                       </div>
-                      <button 
-                         onClick={getCurrentLocation}
-                         disabled={gettingLocation}
-                         className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded transition-colors"
+                      <button
+                        onClick={getCurrentLocation}
+                        disabled={gettingLocation}
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded transition-colors"
                       >
-                         {gettingLocation ? 'Locating...' : 'Pin My Location'}
+                        {gettingLocation ? 'Locating...' : 'Pin My Location'}
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <label className="block text-[10px] font-bold text-slate-500 uppercase">Latitude</label>
                         <input
@@ -243,23 +242,23 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Alert Radius (Meters)</label>
-                        <div className="flex items-center gap-4">
-                          <input
-                            type="range"
-                            min="10"
-                            max="500"
-                            step="10"
-                            value={profile.officeRadius}
-                            onChange={(e) => setProfile({ ...profile, officeRadius: parseInt(e.target.value) })}
-                            className="flex-1 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer"
-                          />
-                          <div className="w-16 bg-white border border-slate-200 rounded px-2 py-1 text-center">
-                            <span className="text-xs font-bold text-slate-700">{profile.officeRadius}m</span>
-                          </div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Alert Radius (Meters)</label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="range"
+                          min="10"
+                          max="500"
+                          step="10"
+                          value={profile.officeRadius}
+                          onChange={(e) => setProfile({ ...profile, officeRadius: parseInt(e.target.value) })}
+                          className="flex-1 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="w-16 shrink-0 bg-white border border-slate-200 rounded px-2 py-1 text-center">
+                          <span className="text-xs font-bold text-slate-700">{profile.officeRadius}m</span>
                         </div>
-                        <p className="text-[10px] text-slate-400">HR Admins will be notified if a check-in occurs outside this radius.</p>
                       </div>
+                      <p className="text-[10px] text-slate-400">HR Admins will be notified if a check-in occurs outside this radius.</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -273,6 +272,94 @@ export default function SettingsPage() {
                 Save Company Profile
               </button>
             </div>
+
+            {/* ── Shift & Attendance Rules */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Timer size={13} className="text-slate-400" />
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Shift & Attendance</p>
+              </div>
+
+              <div className="bg-white border border-slate-100 rounded-xl shadow-sm">
+                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-50">
+                  <Clock size={12} className="text-slate-400" />
+                  <h3 className="text-sm font-semibold text-slate-700">Shift Rules</h3>
+                </div>
+                <div className="px-5 py-4 space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-slate-600">Expected Check-in Time</label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={localCheckin.hour}
+                        onChange={(e) => setLocalCheckin({ ...localCheckin, hour: parseInt(e.target.value) })}
+                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                      <span className="text-slate-400 font-medium">:</span>
+                      <select
+                        value={localCheckin.minute}
+                        onChange={(e) => setLocalCheckin({ ...localCheckin, minute: parseInt(e.target.value) })}
+                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      >
+                        {[0, 15, 30, 45].map((m) => (
+                          <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={localCheckin.period}
+                        onChange={(e) => setLocalCheckin({ ...localCheckin, period: e.target.value as 'AM' | 'PM' })}
+                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <NumInput
+                      label="Grace Period (min)"
+                      value={settings.gracePeriodMinutes}
+                      onChange={(v) => setSettings({ ...settings, gracePeriodMinutes: v })}
+                    />
+                    <NumInput
+                      label="Work Duration (min)"
+                      value={settings.workMinutesPerDay}
+                      onChange={(v) => setSettings({ ...settings, workMinutesPerDay: v })}
+                    />
+                    <NumInput
+                      label="Break Duration (min)"
+                      value={settings.breakMinutesAllocated}
+                      onChange={(v) => setSettings({ ...settings, breakMinutesAllocated: v })}
+                    />
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-50 grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Work Day</p>
+                      <p className="text-sm font-semibold text-slate-700 mt-0.5">{workDur.h}h {workDur.m}m</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Break Time</p>
+                      <p className="text-sm font-semibold text-slate-700 mt-0.5">{breakDur.h}h {breakDur.m}m</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleSaveShift}
+                disabled={savingShift}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                {savingShift ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                Save Shift Rules
+              </button>
+            </div>
+
           </div>
         )}
       </div>
