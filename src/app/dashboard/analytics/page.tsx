@@ -37,12 +37,12 @@ interface Department {
   name: string;
 }
 
-type Bucket = 'present' | 'late' | 'absent' | 'leave';
+type Bucket = 'onTime' | 'late' | 'absent' | 'leave';
 
 // Shared config drives both the chart colors (via CSS vars set in
 // globals.css: --chart-1..4) and the legend/tooltip labels.
 const trendChartConfig = {
-  present: { label: 'Present', color: 'var(--chart-1)' },
+  onTime: { label: 'On time', color: 'var(--chart-1)' },
   leave: { label: 'On leave', color: 'var(--chart-2)' },
   late: { label: 'Late', color: 'var(--chart-3)' },
   absent: { label: 'Absent', color: 'var(--chart-4)' },
@@ -53,7 +53,7 @@ const checkinChartConfig = {
 } satisfies ChartConfig;
 
 const deptChartConfig = {
-  present: { label: 'Present', color: 'var(--chart-1)' },
+  onTime: { label: 'On time', color: 'var(--chart-1)' },
   late: { label: 'Late', color: 'var(--chart-3)' },
   absent: { label: 'Absent', color: 'var(--chart-4)' },
 } satisfies ChartConfig;
@@ -75,7 +75,7 @@ function classifyStatus(status: string): Bucket {
   const s = status?.toUpperCase();
   if (s === 'LATE') return 'late';
   if (s === 'ABSENT') return 'absent';
-  if (s === 'PRESENT' || s === 'ON-TIME') return 'present';
+  if (s === 'PRESENT' || s === 'ON-TIME') return 'onTime';
   return 'leave';
 }
 
@@ -122,10 +122,11 @@ async function fetchDayWithRetry(date: string, maxRetries = 3): Promise<readonly
     try {
       const res = await api.get(`/attendance/logs/daily?date=${date}`);
       return [date, res.data] as const;
-    } catch (err: any) {
-      const status = err?.response?.status;
+    } catch (err) {
+      const apiErr = err as { response?: { status?: number; headers?: Record<string, string | undefined> } };
+      const status = apiErr?.response?.status;
       if (status === 429 && attempt < maxRetries) {
-        const retryAfterHeader = err?.response?.headers?.['retry-after'];
+        const retryAfterHeader = apiErr?.response?.headers?.['retry-after'];
         const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : null;
         const backoffMs = retryAfterMs ?? 500 * 2 ** attempt;
         attempt += 1;
@@ -218,7 +219,7 @@ export default function AnalyticsPage() {
 
     const loadReference = async () => {
       try {
-        const requests: Promise<any>[] = [api.get('/employees')];
+        const requests = [api.get('/employees')];
         if (isSuperAdmin) requests.push(api.get('/departments'));
         const results = await Promise.all(requests);
         if (discarded) return;
@@ -262,10 +263,11 @@ export default function AnalyticsPage() {
         const map: Record<string, AttendanceLog[]> = {};
         results.forEach(([d, data]) => { map[d] = data; });
         setLogsByDate(map);
-      } catch (err: any) {
+      } catch (err) {
         if (discarded) return;
         console.error('Failed to fetch attendance logs:', err);
-        if (err?.response?.status === 429) {
+        const apiErr = err as { response?: { status?: number } };
+        if (apiErr?.response?.status === 429) {
           setFetchError('The server is rate-limiting requests. Try a shorter date range or wait a moment and retry.');
         } else {
           setFetchError('Failed to load attendance data. Please try again.');
@@ -296,7 +298,7 @@ export default function AnalyticsPage() {
     const dates = Object.keys(logsByDate).sort();
     return dates.map((date) => {
       const logs = logsByDate[date] || [];
-      const counts: Record<Bucket, number> = { present: 0, late: 0, absent: 0, leave: 0 };
+      const counts: Record<Bucket, number> = { onTime: 0, late: 0, absent: 0, leave: 0 };
       let checkinMinutesSum = 0;
       let checkinCount = 0;
 
@@ -328,12 +330,12 @@ export default function AnalyticsPage() {
   const totals = useMemo(() => {
     return trendData.reduce(
       (acc, d) => ({
-        present: acc.present + d.present,
+        onTime: acc.onTime + d.onTime,
         late: acc.late + d.late,
         absent: acc.absent + d.absent,
         leave: acc.leave + d.leave,
       }),
-      { present: 0, late: 0, absent: 0, leave: 0 }
+      { onTime: 0, late: 0, absent: 0, leave: 0 }
     );
   }, [trendData]);
 
@@ -354,15 +356,22 @@ export default function AnalyticsPage() {
       logs.forEach((log) => {
         const deptName = employeeDeptMap.get(log.id) || 'Unassigned';
         const bucket = classifyStatus(log.status);
-        const current = byDept.get(deptName) || { present: 0, late: 0, absent: 0, leave: 0 };
+        const current = byDept.get(deptName) || { onTime: 0, late: 0, absent: 0, leave: 0 };
         current[bucket] += 1;
         byDept.set(deptName, current);
       });
     });
 
     return Array.from(byDept.entries())
-      .map(([department, counts]) => ({ department, ...counts }))
-      .sort((a, b) => (b.present + b.late) - (a.present + a.late));
+      .map(([department, counts]) => ({
+        department,
+        onTime: counts.onTime,
+        present: counts.onTime + counts.late,
+        late: counts.late,
+        absent: counts.absent,
+        leave: counts.leave,
+      }))
+      .sort((a, b) => b.present - a.present);
   }, [logsByDate, employeeDeptMap, isSuperAdmin]);
 
   const displayRange = `${formatShortDate(range.from)} – ${formatShortDate(range.to)}`;
@@ -442,7 +451,7 @@ export default function AnalyticsPage() {
             <>
               {/* ── Summary stats */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="Present" value={totals.present} icon={CheckCircle2} tone="present" />
+                <StatCard label="Present" value={totals.onTime + totals.late} icon={CheckCircle2} tone="present" />
                 <StatCard label="On leave" value={totals.leave} icon={Palmtree} tone="leave" />
                 <StatCard label="Late arrivals" value={totals.late} icon={Timer} tone="late" />
                 <StatCard label="Absent" value={totals.absent} icon={UserMinus} tone="absent" />
@@ -456,9 +465,9 @@ export default function AnalyticsPage() {
                   <ChartContainer config={trendChartConfig} className="h-[280px] w-full">
                     <AreaChart data={trendData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                       <defs>
-                        <linearGradient id="fillPresent" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="var(--color-present)" stopOpacity={0.8} />
-                          <stop offset="95%" stopColor="var(--color-present)" stopOpacity={0.08} />
+                        <linearGradient id="fillOnTime" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--color-onTime)" stopOpacity={0.8} />
+                          <stop offset="95%" stopColor="var(--color-onTime)" stopOpacity={0.08} />
                         </linearGradient>
                         <linearGradient id="fillLeave" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="var(--color-leave)" stopOpacity={0.8} />
@@ -478,7 +487,7 @@ export default function AnalyticsPage() {
                       <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
                       <ChartLegend content={<ChartLegendContent />} />
-                      <Area type="monotone" dataKey="present" stackId="1" stroke="var(--color-present)" fill="url(#fillPresent)" />
+                      <Area type="monotone" dataKey="onTime" stackId="1" stroke="var(--color-onTime)" fill="url(#fillOnTime)" />
                       <Area type="monotone" dataKey="leave" stackId="1" stroke="var(--color-leave)" fill="url(#fillLeave)" />
                       <Area type="monotone" dataKey="late" stackId="1" stroke="var(--color-late)" fill="url(#fillLate)" />
                       <Area type="monotone" dataKey="absent" stackId="1" stroke="var(--color-absent)" fill="url(#fillAbsent)" />
@@ -542,7 +551,7 @@ export default function AnalyticsPage() {
                           <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
                           <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
                           <ChartLegend content={<ChartLegendContent />} />
-                          <Bar dataKey="present" stackId="d" fill="var(--color-present)" radius={[0, 0, 0, 0]} />
+                          <Bar dataKey="onTime" stackId="d" fill="var(--color-onTime)" radius={[0, 0, 0, 0]} />
                           <Bar dataKey="late" stackId="d" fill="var(--color-late)" />
                           <Bar dataKey="absent" stackId="d" fill="var(--color-absent)" radius={[4, 4, 0, 0]} />
                         </BarChart>

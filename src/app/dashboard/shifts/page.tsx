@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { History, Plus, X, Clock, Loader2, Trash2, Check, ChevronDown, Pencil, } from 'lucide-react';
+import { History, Plus, X, Clock, Loader2, Trash2, ChevronDown, Pencil } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { clsx, type ClassValue } from 'clsx';
@@ -52,6 +52,7 @@ export default function ShiftsPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchShifts();
   }, []);
 
@@ -96,12 +97,13 @@ export default function ShiftsPage() {
     try {
       await api.delete(`/shifts/${id}`);
       fetchShifts();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to delete shift.');
+    } catch (err) {
+      const apiErr = err as { response?: { data?: { message?: string } } };
+      alert(apiErr.response?.data?.message || 'Failed to delete shift.');
     }
   };
 
-  const setShift = (k: string, v: any) => setNewShift(p => ({ ...p, [k]: v }));
+  const setShift = <K extends keyof typeof newShift>(k: K, v: (typeof newShift)[K]) => setNewShift(p => ({ ...p, [k]: v }));
 
   const handleEdit = (shift: ShiftProfile) => {
     setEditingShift(shift);

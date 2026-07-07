@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, MoreVertical, Trash2, Power, DollarSign } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -126,8 +127,7 @@ export default function EmployeesPage() {
   const [shifts, setShifts] = useState<ShiftProfile[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ type: 'DEACTIVATE' | 'ARCHIVE'; id: string; name: string } | null>(null);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
-  const [isDetailsDrawerOpen, setIsDetailsDrawerOpen] = useState(false);
+  const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
   const [payrollStatus, setPayrollStatus] = useState<PayrollStatusRecord[]>([]);
 
   const canManageEmployee = (emp: Employee) => {
@@ -232,6 +232,16 @@ export default function EmployeesPage() {
     } catch {
       alert('Action failed.');
     }
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedEmployeeId((prev) => (prev === id ? null : id));
+  };
+
+  const closeExpanded = () => {
+    setExpandedEmployeeId(null);
+    fetchEmployees();
+    fetchPayrollStatus();
   };
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -343,127 +353,161 @@ export default function EmployeesPage() {
                 <tbody className="divide-y divide-slate-50">
                   {filteredEmployees.map((emp) => {
                     const av = avatarColor(emp.name);
+                    const isExpanded = expandedEmployeeId === emp.id;
                     return (
-                      <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors group">
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold flex-shrink-0"
-                              style={{ backgroundColor: av.bg, color: av.text }}
-                            >
-                              {emp.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-slate-700">
-                                {emp.name}
-                              </p>
-                              <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                                <Mail size={10} />
-                                {emp.email}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <RoleBadge role={emp.role} />
-                        </td>
-                        <td className="px-5 py-3.5 hidden md:table-cell">
-                          <p className="text-sm text-slate-600">
-                            {emp.profile?.designation || '—'}
-                          </p>
-                          <div className="mt-1">
-                            <DepartmentBadge name={emp.department?.name || emp.profile?.department} />
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5 text-center">
-                          {emp.isActive ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
-                              <CheckCircle2 size={9} />
-                              Active
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md">
-                              <XCircle size={9} />
-                              Inactive
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5 hidden lg:table-cell">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-xs text-slate-400 font-mono">
-                              {emp.profile?.employeeCode || '—'}
-                            </span>
-                            {payrollStatus.find(p => p.id === emp.id)?.payment?.status === 'PAID' ? (
-                               <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">
-                                 <DollarSign size={8} /> Paid
-                               </span>
-                            ) : (
-                               <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400 uppercase tracking-tighter">
-                                 <DollarSign size={8} /> Pending
-                               </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5 text-right relative">
-                          {emp.role !== 'SUPER_ADMIN' && (
-                            <>
-                              <button
-                                onClick={() => setOpenMenuId(openMenuId === emp.id ? null : emp.id)}
-                                className={`p-1.5 rounded-md transition-all ${openMenuId === emp.id ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                      <React.Fragment key={emp.id}>
+                        <tr
+                          onClick={() => toggleExpand(emp.id)}
+                          className={`cursor-pointer transition-colors group ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/60'}`}
+                        >
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+                                style={{ backgroundColor: av.bg, color: av.text }}
                               >
-                                <MoreVertical size={14} />
-                              </button>
-
-                              {openMenuId === emp.id && (
-                                <>
-                                  <div 
-                                    className="fixed inset-0 z-10" 
-                                    onClick={() => setOpenMenuId(null)} 
-                                  />
-                                  <div className="absolute right-12 top-1/2 -translate-y-1/2 z-20 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1.5 overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200">
-                                    <button
-                                      onClick={() => {
-                                        setOpenMenuId(null);
-                                        setSelectedEmployeeId(emp.id);
-                                        setIsDetailsDrawerOpen(true);
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
-                                    >
-                                      <FileText size={12} className="text-indigo-500" />
-                                      View Full Profile
-                                    </button>
-                                    {canManageEmployee(emp) && (
-                                      <>
-                                        <hr className="my-1 border-slate-50" />
-                                        <button
-                                          onClick={() => {
-                                            setOpenMenuId(null);
-                                            setConfirmModal({ type: 'DEACTIVATE', id: emp.id, name: emp.name });
-                                          }}
-                                          className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                                        >
-                                          <Power size={12} className={emp.isActive ? 'text-amber-500' : 'text-emerald-500'} />
-                                          {emp.isActive ? 'Deactivate Account' : 'Activate Account'}
-                                        </button>
-                                        <button
-                                          onClick={() => {
-                                            setOpenMenuId(null);
-                                            setConfirmModal({ type: 'ARCHIVE', id: emp.id, name: emp.name });
-                                          }}
-                                          className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
-                                        >
-                                          <Trash2 size={12} />
-                                          Archive Account (Delete)
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
-                                </>
+                                {emp.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-slate-700">
+                                  {emp.name}
+                                </p>
+                                <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                                  <Mail size={10} />
+                                  {emp.email}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <RoleBadge role={emp.role} />
+                          </td>
+                          <td className="px-5 py-3.5 hidden md:table-cell">
+                            <p className="text-sm text-slate-600">
+                              {emp.profile?.designation || '—'}
+                            </p>
+                            <div className="mt-1">
+                              <DepartmentBadge name={emp.department?.name || emp.profile?.department} />
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            {emp.isActive ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
+                                <CheckCircle2 size={9} />
+                                Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md">
+                                <XCircle size={9} />
+                                Inactive
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 hidden lg:table-cell">
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs text-slate-400 font-mono">
+                                {emp.profile?.employeeCode || '—'}
+                              </span>
+                              {payrollStatus.find(p => p.id === emp.id)?.payment?.status === 'PAID' ? (
+                                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">
+                                   <DollarSign size={8} /> Paid
+                                 </span>
+                              ) : (
+                                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400 uppercase tracking-tighter">
+                                   <DollarSign size={8} /> Pending
+                                 </span>
                               )}
-                            </>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-right relative">
+                            {emp.role !== 'SUPER_ADMIN' && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenMenuId(openMenuId === emp.id ? null : emp.id);
+                                  }}
+                                  className={`p-1.5 rounded-md transition-all ${openMenuId === emp.id ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                  <MoreVertical size={14} />
+                                </button>
+
+                                {openMenuId === emp.id && (
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-10"
+                                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); }}
+                                    />
+                                    <div
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="absolute right-12 top-1/2 -translate-y-1/2 z-20 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1.5 overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200"
+                                    >
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuId(null);
+                                          toggleExpand(emp.id);
+                                        }}
+                                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
+                                      >
+                                        <FileText size={12} className="text-indigo-500" />
+                                        {isExpanded ? 'Collapse Profile' : 'View Full Profile'}
+                                      </button>
+                                      {canManageEmployee(emp) && (
+                                        <>
+                                          <hr className="my-1 border-slate-50" />
+                                          <button
+                                            onClick={() => {
+                                              setOpenMenuId(null);
+                                              setConfirmModal({ type: 'DEACTIVATE', id: emp.id, name: emp.name });
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                                          >
+                                            <Power size={12} className={emp.isActive ? 'text-amber-500' : 'text-emerald-500'} />
+                                            {emp.isActive ? 'Deactivate Account' : 'Activate Account'}
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setOpenMenuId(null);
+                                              setConfirmModal({ type: 'ARCHIVE', id: emp.id, name: emp.name });
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                                          >
+                                            <Trash2 size={12} />
+                                            Archive Account (Delete)
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </td>
+                        </tr>
+
+                        <AnimatePresence initial={false}>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={6} className="p-0">
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                                  className="overflow-hidden"
+                                >
+                                  <EmployeeDetailsDrawer
+                                    employeeId={emp.id}
+                                    canManage={canManageEmployee(emp)}
+                                    onClose={closeExpanded}
+                                    avatarColor={av}
+                                  />
+                                </motion.div>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                      </tr>
+                        </AnimatePresence>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -485,8 +529,8 @@ export default function EmployeesPage() {
                 {confirmModal.type === 'ARCHIVE' ? 'Archive Employee?' : 'Change Account Status?'}
               </h3>
               <p className="text-sm text-slate-500 mt-2">
-                {confirmModal.type === 'ARCHIVE' 
-                  ? `Are you sure you want to archive ${confirmModal.name}? This will remove them from the active list but keep their historical records.` 
+                {confirmModal.type === 'ARCHIVE'
+                  ? `Are you sure you want to archive ${confirmModal.name}? This will remove them from the active list but keep their historical records.`
                   : `Are you sure you want to change the status for ${confirmModal.name}? Deactivated users cannot access their accounts.`}
               </p>
             </div>
@@ -664,18 +708,6 @@ export default function EmployeesPage() {
           </div>
         </div>
       )}
-
-
-      <EmployeeDetailsDrawer 
-        isOpen={isDetailsDrawerOpen}
-        onClose={() => {
-          setIsDetailsDrawerOpen(false);
-          fetchEmployees();
-          fetchPayrollStatus();
-        }}
-        employeeId={selectedEmployeeId}
-        canManage={selectedEmployeeId ? canManageEmployee(employees.find(e => e.id === selectedEmployeeId)!) : false}
-      />
     </DashboardLayout>
   );
 }

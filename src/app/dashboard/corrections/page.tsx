@@ -201,7 +201,10 @@ export default function CorrectionsPage() {
     }
   };
 
-  useEffect(() => { fetchRequests(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchRequests();
+  }, []);
 
   const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     setProcessingId(id);

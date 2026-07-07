@@ -35,9 +35,10 @@ export default function LoginPage() {
 
       setAuth(employee, accessToken, refreshToken);
       router.push('/dashboard');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.message || 'Authentication failed. Please try again.');
+      const apiErr = err as { response?: { data?: { message?: string } } };
+      setError(apiErr.response?.data?.message || 'Authentication failed. Please try again.');
       setLoading(false);
     }
   };
@@ -191,7 +192,7 @@ export default function LoginPage() {
             </button>
 
             <p className="text-center text-sm text-slate-500 mt-6">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link href="/register" className="text-indigo-600 font-semibold hover:underline">
                 Create Organisation
               </Link>

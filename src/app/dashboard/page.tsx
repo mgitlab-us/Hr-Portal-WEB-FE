@@ -7,11 +7,14 @@ import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { io } from 'socket.io-client';
 
-// ── Duotone tone system — teal for positive/on-track, coral for attention-needed.
-// Every colored surface in the dashboard draws from just these two ramps.
+// ── Tone system — blue is neutral/informational, green is on-track,
+// yellow is a soft flag, red is a hard flag. Each stat/status maps to
+// exactly one of these based on its real-world severity, not a duotone split.
 const TONES = {
-   teal: { bg: '#E1F5EE', chip: '#9FE1CB', icon: '#0F6E56', accent: '#1D9E75', dark: '#04342C' },
-   coral: { bg: '#FAECE7', chip: '#F0997B', icon: '#993C1D', accent: '#D85A30', dark: '#4A1B0C' },
+   blue: { bg: '#DBEAFE', chip: '#93C5FD', icon: '#1D4ED8', accent: '#2563EB', dark: '#1E3A8A' },
+   green: { bg: '#DCFCE7', chip: '#86EFAC', icon: '#15803D', accent: '#16A34A', dark: '#052E16' },
+   yellow: { bg: '#FEF9C3', chip: '#FDE047', icon: '#A16207', accent: '#CA8A04', dark: '#422006' },
+   red: { bg: '#FEE2E2', chip: '#FCA5A5', icon: '#B91C1C', accent: '#DC2626', dark: '#450A0A' },
 } as const;
 
 type Tone = keyof typeof TONES;
@@ -58,14 +61,14 @@ function StatCard({
    );
 }
 
-// ── Pulse status badge — collapsed to the two-tone system
+// ── Pulse status badge — green on-time, yellow late, red absent/missing
 function StatusBadge({ action }: { action: string }) {
    const lower = action?.toLowerCase() || '';
    if (lower.includes('late'))
       return (
          <span
             className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
-            style={{ color: TONES.coral.icon, backgroundColor: TONES.coral.bg }}
+            style={{ color: TONES.yellow.icon, backgroundColor: TONES.yellow.bg }}
          >
             Late
          </span>
@@ -74,7 +77,7 @@ function StatusBadge({ action }: { action: string }) {
       return (
          <span
             className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
-            style={{ color: TONES.coral.icon, backgroundColor: TONES.coral.bg }}
+            style={{ color: TONES.red.icon, backgroundColor: TONES.red.bg }}
          >
             Absent
          </span>
@@ -83,7 +86,7 @@ function StatusBadge({ action }: { action: string }) {
       return (
          <span
             className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
-            style={{ color: TONES.teal.icon, backgroundColor: TONES.teal.bg }}
+            style={{ color: TONES.green.icon, backgroundColor: TONES.green.bg }}
          >
             On time
          </span>
@@ -96,11 +99,12 @@ function StatusBadge({ action }: { action: string }) {
 }
 
 // ── Avatar tone follows the same status logic as the badge, not a name hash,
-// so a person's chip color always matches what happened (teal = fine, coral = flag).
+// so a person's chip color always matches what happened.
 function statusTone(action: string): Tone {
    const lower = action?.toLowerCase() || '';
-   if (lower.includes('late') || lower.includes('absent') || lower.includes('missing')) return 'coral';
-   return 'teal';
+   if (lower.includes('late')) return 'yellow';
+   if (lower.includes('absent') || lower.includes('missing')) return 'red';
+   return 'green';
 }
 
 type PulseItem = {
@@ -111,7 +115,7 @@ type PulseItem = {
    companyId?: string;
 };
 
-// ── Circular attendance gauge
+// ── Circular attendance gauge — bold blue, no dimming
 function AttendanceRing({ percent }: { percent: number }) {
    const clamped = Math.max(0, Math.min(100, percent));
    const radius = 30;
@@ -119,13 +123,13 @@ function AttendanceRing({ percent }: { percent: number }) {
    const offset = circumference * (1 - clamped / 100);
    return (
       <svg width="76" height="76" viewBox="0 0 76 76" className="flex-shrink-0">
-         <circle cx="38" cy="38" r={radius} fill="none" stroke={TONES.teal.bg} strokeWidth="8" />
+         <circle cx="38" cy="38" r={radius} fill="none" stroke={TONES.blue.bg} strokeWidth="8" />
          <circle
             cx="38"
             cy="38"
             r={radius}
             fill="none"
-            stroke={TONES.teal.accent}
+            stroke={TONES.blue.accent}
             strokeWidth="8"
             strokeLinecap="round"
             strokeDasharray={circumference}
@@ -304,7 +308,7 @@ export default function DashboardOverview() {
                      className="relative flex items-center justify-center bg-white border border-slate-100 hover:border-slate-200 hover:shadow-sm rounded-full p-2.5 transition-all duration-200 cursor-pointer"
                   >
                      {notifications.some(n => !n.read) ? (
-                        <BellRing size={16} className="text-slate-600 animate-bounce" style={{ color: TONES.coral.accent }} />
+                        <BellRing size={16} className="text-slate-600 animate-bounce" style={{ color: TONES.red.accent }} />
                      ) : (
                         <Bell size={16} className="text-slate-600" />
                      )}
@@ -337,12 +341,12 @@ export default function DashboardOverview() {
                            <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
                               {notifications.length > 0 ? (
                                  notifications.map((notif) => {
-                                     let iconColor: string = TONES.teal.icon;
-                                     let iconBg: string = TONES.teal.bg;
+                                     let iconColor: string = TONES.blue.icon;
+                                     let iconBg: string = TONES.blue.bg;
                                     
                                     if (notif.type === 'geofence') {
-                                       iconColor = TONES.coral.icon;
-                                       iconBg = TONES.coral.bg;
+                                       iconColor = TONES.red.icon;
+                                       iconBg = TONES.red.bg;
                                     } else if (notif.type === 'leave') {
                                        iconColor = '#2563EB';
                                        iconBg = '#EFF6FF';
@@ -411,35 +415,35 @@ export default function DashboardOverview() {
                   label="Total Staff"
                   value={stats.total}
                   icon={Users}
-                  tone="teal"
+                  tone="blue"
                   sub="Active personnel"
                />
                <StatCard
                   label="Present Today"
                   value={stats.present}
                   icon={UserCheck}
-                  tone="teal"
+                  tone="green"
                   sub={`${Math.round(stats.overallAttendance)}% attendance`}
                />
                <StatCard
                   label="On Leave"
                   value={stats.onLeave}
                   icon={Plane}
-                  tone="teal"
+                  tone="green"
                   sub="Approved leave"
                />
                <StatCard
                   label="Late Arrivals"
                   value={stats.late}
                   icon={Timer}
-                  tone="coral"
+                  tone="yellow"
                   sub="Flagged today"
                />
                <StatCard
                   label="Absent"
                   value={stats.absent}
                   icon={UserMinus}
-                  tone="coral"
+                  tone="red"
                   sub="Not checked in"
                />
             </div>
@@ -458,7 +462,7 @@ export default function DashboardOverview() {
                      <div className="flex items-center gap-1.5">
                         <div
                            className="w-1.5 h-1.5 rounded-full animate-pulse"
-                           style={{ backgroundColor: TONES.teal.accent }}
+                           style={{ backgroundColor: TONES.green.accent }}
                         />
                         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                            Live
@@ -539,15 +543,15 @@ export default function DashboardOverview() {
                            <span className="text-xs font-medium text-slate-400">Monitoring on-time trends...</span>
                         ) : stats.attendanceChange >= 0 ? (
                            <>
-                              <TrendingUp size={12} style={{ color: TONES.teal.accent }} />
-                              <span className="text-xs font-medium" style={{ color: TONES.teal.icon }}>
+                              <TrendingUp size={12} style={{ color: TONES.green.accent }} />
+                              <span className="text-xs font-medium" style={{ color: TONES.green.icon }}>
                                  +{stats.attendanceChange}% vs last month
                               </span>
                            </>
                         ) : (
                            <>
-                              <TrendingUp size={12} className="rotate-180" style={{ color: TONES.coral.accent }} />
-                              <span className="text-xs font-medium" style={{ color: TONES.coral.icon }}>
+                              <TrendingUp size={12} className="rotate-180" style={{ color: TONES.red.accent }} />
+                              <span className="text-xs font-medium" style={{ color: TONES.red.icon }}>
                                  {stats.attendanceChange}% vs last month
                               </span>
                            </>

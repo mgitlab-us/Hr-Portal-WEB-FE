@@ -56,9 +56,10 @@ export default function RegisterPage() {
 
       setAuth(employee, accessToken, refreshToken);
       router.push('/dashboard');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Registration error:', err);
-      setError(err.response?.data?.message || 'Registration failed. Please check your details.');
+      const apiErr = err as { response?: { data?: { message?: string } } };
+      setError(apiErr.response?.data?.message || 'Registration failed. Please check your details.');
       setLoading(false);
     }
   };
@@ -156,7 +157,7 @@ export default function RegisterPage() {
                     name="timezone"
                     required
                     value={formData.timezone}
-                    onChange={handleChange as any}
+                    onChange={handleChange}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all appearance-none"
                   >
                     <option value="UTC">UTC (Default)</option>

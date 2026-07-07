@@ -13,11 +13,11 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// ── Sidebar's single accent — teal, matching the rest of the dashboard's duotone.
-const ACTIVE_BG = '#E1F5EE';
-const ACTIVE_ICON = '#0F6E56';
-const ACTIVE_TEXT = '#04342C';
-const ACTIVE_DOT = '#1D9E75';
+// ── Sidebar's active state — solid bold blue, white text/icon, no dim tint.
+const ACTIVE_BG = '#2563EB';
+const ACTIVE_TEXT = '#FFFFFF';
+const ACTIVE_ICON = '#FFFFFF';
+const ACTIVE_DOT = 'rgba(255, 255, 255, 0.75)';
 
 interface NavItemProps {
   href: string;
@@ -37,7 +37,7 @@ const NavItem = ({ href, icon: Icon, label, active, collapsed, onClick }: NavIte
         'flex items-center gap-3 rounded-xl text-sm transition-all duration-150',
         collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5',
         active
-          ? 'font-medium'
+          ? 'font-medium shadow-sm'
           : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-normal'
       )}
       style={active ? { backgroundColor: ACTIVE_BG, color: ACTIVE_TEXT } : undefined}

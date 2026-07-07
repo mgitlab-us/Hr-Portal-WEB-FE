@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Calendar, MessageSquare, Loader2, Check, X, Plane, Clock, Briefcase, AlertCircle } from 'lucide-react';
+import { CheckCircle2, MessageSquare, Loader2, Check, X, Plane, Briefcase } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
@@ -58,6 +58,7 @@ export default function LeavesPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRequests();
   }, []);
 

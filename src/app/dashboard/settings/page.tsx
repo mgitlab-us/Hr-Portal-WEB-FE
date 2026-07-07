@@ -74,7 +74,10 @@ export default function SettingsPage() {
     { hour: 9, minute: 0, period: 'AM' }
   );
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!mounted) return;
@@ -91,8 +94,12 @@ export default function SettingsPage() {
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
     };
-    if (user?.role === 'SUPER_ADMIN') fetchData();
-    else setLoading(false);
+    if (user?.role === 'SUPER_ADMIN') {
+      fetchData();
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+    }
   }, [user, mounted]);
 
   const handleSaveShift = async () => {

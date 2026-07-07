@@ -42,8 +42,9 @@ export default function ForceChangePassword() {
         setAuth(updatedUser, accessToken!, refreshToken!);
       }, 1500);
       
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to update password. Please try again.');
+    } catch (err) {
+      const apiErr = err as { response?: { data?: { message?: string } } };
+      setError(apiErr.response?.data?.message || 'Failed to update password. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -121,7 +122,7 @@ export default function ForceChangePassword() {
               </button>
               
               <p className="text-[10px] text-center text-slate-400 italic">
-                By clicking "Update & Continue", you agree to our security policies.
+                By clicking &quot;Update &amp; Continue&quot;, you agree to our security policies.
               </p>
             </form>
           )}
