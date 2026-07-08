@@ -74,6 +74,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
     bankName: '',
     accountNumber: '',
     designation: '',
+    phone: '',
     departmentId: '',
     shiftProfileId: ''
   });
@@ -98,6 +99,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         bankName: p?.bankName || '',
         accountNumber: p?.accountNumber || '',
         designation: p?.designation || '',
+        phone: p?.phone || '',
         departmentId: empRes.data.departmentId || '',
         shiftProfileId: empRes.data.shiftProfileId || ''
       });
@@ -119,6 +121,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
     try {
       await api.patch(`/employees/${employeeId}`, {
         designation: editInfo.designation,
+        phone: editInfo.phone,
         departmentId: editInfo.departmentId || null,
         shiftProfileId: editInfo.shiftProfileId || null,
         baseSalary: parseFloat(editInfo.baseSalary) || 0,
@@ -207,7 +210,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
           {/* Basic HR info grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white border border-slate-100 rounded-xl p-4 mb-5">
             <InfoField icon={Mail} label="Email" value={employee?.email || '—'} />
-            <InfoField icon={Phone} label="Phone" value={employee?.profile?.phone || '—'} />
+            <InfoField icon={Phone} label="Phone" value={editInfo.phone || '—'} />
             <InfoField icon={Building2} label="Department" value={departmentName || '—'} />
             <InfoField icon={Briefcase} label="Designation" value={editInfo.designation || '—'} />
             <InfoField icon={Clock3} label="Shift Profile" value={shiftName || 'Default'} />
@@ -268,6 +271,16 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     <input
                       value={editInfo.designation}
                       onChange={e => setEditInfo(p => ({ ...p, designation: e.target.value }))}
+                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Mobile Number</label>
+                    <input
+                      type="tel"
+                      value={editInfo.phone}
+                      onChange={e => setEditInfo(p => ({ ...p, phone: e.target.value }))}
+                      placeholder="+92 300 1234567"
                       className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none"
                     />
                   </div>

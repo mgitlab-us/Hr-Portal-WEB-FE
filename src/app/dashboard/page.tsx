@@ -88,7 +88,7 @@ function StatusBadge({ action }: { action: string }) {
             className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
             style={{ color: TONES.green.icon, backgroundColor: TONES.green.bg }}
          >
-            On time
+            
          </span>
       );
    return (

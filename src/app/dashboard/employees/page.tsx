@@ -116,6 +116,7 @@ export default function EmployeesPage() {
   const [newEmployee, setNewEmployee] = useState({
     name: '',
     email: '',
+    phone: '',
     password: '',
     role: 'EMPLOYEE',
     designation: '',
@@ -200,7 +201,7 @@ export default function EmployeesPage() {
       await api.post('/employees', newEmployee);
       setIsAddModalOpen(false);
       fetchEmployees();
-      setNewEmployee({ name: '', email: '', password: '', role: 'EMPLOYEE', designation: '', department: '', departmentId: '', employeeCode: '', shiftProfileId: '' });
+      setNewEmployee({ name: '', email: '', phone: '', password: '', role: 'EMPLOYEE', designation: '', department: '', departmentId: '', employeeCode: '', shiftProfileId: '' });
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { message?: string } } };
       const msg = e?.response?.data?.message || '';
@@ -593,14 +594,24 @@ export default function EmployeesPage() {
                 />
               </div>
 
-              <Field
-                label="Initial password"
-                required
-                type="password"
-                value={newEmployee.password}
-                onChange={set('password')}
-                placeholder="Minimum 6 characters"
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <Field
+                  label="Mobile number"
+                  required
+                  type="tel"
+                  value={newEmployee.phone}
+                  onChange={set('phone')}
+                  placeholder="+92 300 1234567"
+                />
+                <Field
+                  label="Initial password"
+                  required
+                  type="password"
+                  value={newEmployee.password}
+                  onChange={set('password')}
+                  placeholder="Minimum 6 characters"
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <Field

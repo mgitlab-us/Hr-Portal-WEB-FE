@@ -25,7 +25,6 @@ interface AdminOption {
   email: string;
 }
 
-const COMPANY_NAME = 'TapIn';
 
 export default function DepartmentsPage() {
   const { user } = useAuthStore();
@@ -189,7 +188,7 @@ export default function DepartmentsPage() {
             </div>
           ) : view === 'chart' ? (
             <DepartmentOrgChart
-              companyName={COMPANY_NAME}
+            companyName={user?.company?.name || 'Organisation'}
               departments={departments}
               onAddDepartment={openCreate}
               onEditDepartment={openEdit}

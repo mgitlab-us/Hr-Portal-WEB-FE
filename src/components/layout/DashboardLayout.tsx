@@ -2,8 +2,9 @@
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Clock, FileCheck, Plane, Settings, LogOut, ShieldCheck, Menu, X, History, Calendar, Building2, PanelLeftClose, PanelLeftOpen, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, Clock, FileCheck, Plane, Settings, LogOut, Menu, X, History, Calendar, Building2, PanelLeftClose, PanelLeftOpen, BarChart3 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { api } from '@/lib/api';
 import ForceChangePassword from '@/components/auth/ForceChangePassword';
 import ClientOnly from '@/components/shared/ClientOnly';
 import { clsx, type ClassValue } from 'clsx';
@@ -43,7 +44,7 @@ const NavItem = ({ href, icon: Icon, label, active, collapsed, onClick }: NavIte
       style={active ? { backgroundColor: ACTIVE_BG, color: ACTIVE_TEXT } : undefined}
     >
       <Icon
-        size={15}
+        size={collapsed ? 18 : 15}
         className="flex-shrink-0"
         style={{ color: active ? ACTIVE_ICON : undefined }}
       />
@@ -90,9 +91,11 @@ interface SidebarProps {
   onNavClick?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  logoUrl?: string | null;
+  orgName?: string;
 }
 
-const Sidebar = ({ pathname, user, onLogout, onNavClick, collapsed, onToggleCollapse }: SidebarProps) => (
+const Sidebar = ({ pathname, user, onLogout, onNavClick, collapsed, onToggleCollapse, logoUrl, orgName }: SidebarProps) => (
   <div className="flex flex-col h-full">
     {/* Logo */}
     <div
@@ -101,17 +104,20 @@ const Sidebar = ({ pathname, user, onLogout, onNavClick, collapsed, onToggleColl
         collapsed ? 'justify-center px-2' : 'justify-between px-4'
       )}
     >
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
-          <ShieldCheck size={14} className="text-white" />
+      <div className="flex items-center min-w-0">
+        <div
+          className={cn(
+            'rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0 overflow-hidden transition-all',
+            collapsed ? 'w-8 h-8' : 'w-9 h-9'
+          )}
+        >
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={orgName || 'Company logo'} className="w-full h-full object-cover" />
+          ) : (
+            <Building2 size={collapsed ? 16 : 18} className="text-white" />
+          )}
         </div>
-        {!collapsed && (
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-800 leading-none tracking-tight">
-              TapIn
-            </p>
-          </div>
-        )}
       </div>
       {!collapsed && onToggleCollapse && (
         <button
@@ -130,7 +136,7 @@ const Sidebar = ({ pathname, user, onLogout, onNavClick, collapsed, onToggleColl
         className="mx-auto mt-3 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
         aria-label="Expand sidebar"
       >
-        <PanelLeftOpen size={16} />
+        <PanelLeftOpen size={18} />
       </button>
     )}
 
@@ -201,7 +207,7 @@ const Sidebar = ({ pathname, user, onLogout, onNavClick, collapsed, onToggleColl
             collapsed ? 'justify-center px-0' : 'px-3'
           )}
         >
-          <LogOut size={14} className="flex-shrink-0" />
+          <LogOut size={collapsed ? 16 : 14} className="flex-shrink-0" />
           {!collapsed && <span>Sign out</span>}
         </button>
         {collapsed && (
@@ -230,6 +236,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuthStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isCollapsed, setIsCollapsed] = React.useState<boolean>(getInitialCollapsedState);
+  const [orgLogo, setOrgLogo] = React.useState<string | null>(null);
+  const [orgName, setOrgName] = React.useState<string>('TapIn');
 
   const toggleCollapse = () => {
     setIsCollapsed((prev) => {
@@ -250,6 +258,24 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       router.replace('/login');
     }
   }, [user, router]);
+
+  // Fetch the organisation's branding (logo + name) once a user is present.
+  React.useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const fetchProfile = async () => {
+      try {
+        const res = await api.get('/attendance/settings/company-profile');
+        if (cancelled) return;
+        if (res.data?.logo) setOrgLogo(res.data.logo);
+        if (res.data?.name) setOrgName(res.data.name);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchProfile();
+    return () => { cancelled = true; };
+  }, [user]);
 
   if (!user) {
     return (
@@ -280,6 +306,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             onLogout={handleLogout}
             collapsed={isCollapsed}
             onToggleCollapse={toggleCollapse}
+            logoUrl={orgLogo}
+            orgName={orgName}
           />
         </ClientOnly>
       </aside>
@@ -289,11 +317,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
         {/* Mobile header */}
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center">
-              <ShieldCheck size={13} className="text-white" />
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden">
+              {orgLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={orgLogo} alt={orgName} className="w-full h-full object-cover" />
+              ) : (
+                <Building2 size={16} className="text-white" />
+              )}
             </div>
-            <span className="text-sm font-semibold text-slate-800">TapIn</span>
           </div>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -320,11 +352,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           {/* Drawer */}
           <div className="fixed inset-y-0 left-0 z-50 w-56 bg-slate-50 border-r border-slate-100 flex flex-col lg:hidden shadow-xl">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center">
-                  <ShieldCheck size={13} className="text-white" />
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden">
+                  {orgLogo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={orgLogo} alt={orgName} className="w-full h-full object-cover" />
+                  ) : (
+                    <Building2 size={16} className="text-white" />
+                  )}
                 </div>
-                <span className="text-sm font-semibold text-slate-800">TapIn</span>
               </div>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -340,6 +376,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   user={user}
                   onLogout={handleLogout}
                   onNavClick={() => setIsMobileMenuOpen(false)}
+                  logoUrl={orgLogo}
+                  orgName={orgName}
                 />
               </ClientOnly>
             </div>

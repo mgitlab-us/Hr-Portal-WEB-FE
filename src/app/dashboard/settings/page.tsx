@@ -11,6 +11,8 @@ const formatMinutes = (totalMinutes: number) => ({
   m: totalMinutes % 60,
 });
 
+const MAX_LOGO_SIZE_MB = 1;
+
 function NumInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
     <div className="space-y-1">
@@ -41,8 +43,10 @@ export default function SettingsPage() {
     officeLat: 24.8607,
     officeLng: 67.0011,
     officeRadius: 70,
+    logo: null as string | null,
   });
 
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
 
   const getCurrentLocation = () => {
@@ -67,6 +71,39 @@ export default function SettingsPage() {
     );
   };
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoError(null);
+
+    if (!file.type.startsWith('image/')) {
+      setLogoError('Please upload an image file.');
+      return;
+    }
+    if (file.size > MAX_LOGO_SIZE_MB * 1024 * 1024) {
+      setLogoError(`Logo must be smaller than ${MAX_LOGO_SIZE_MB}MB.`);
+      return;
+    }
+    if (file.type !== 'image/png') {
+      setLogoError(null); // not a hard error — just informational below
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProfile((prev) => ({ ...prev, logo: reader.result as string }));
+    };
+    reader.onerror = () => setLogoError('Could not read that file, please try again.');
+    reader.readAsDataURL(file);
+
+    // Reset the input so re-selecting the same file re-triggers onChange
+    e.target.value = '';
+  };
+
+  const handleRemoveLogo = () => {
+    setProfile((prev) => ({ ...prev, logo: null }));
+    setLogoError(null);
+  };
+
   const [loading, setLoading] = useState(true);
   const [savingShift, setSavingShift] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -88,7 +125,7 @@ export default function SettingsPage() {
           api.get('/attendance/settings/company-profile'),
         ]);
         setSettings(shiftRes.data);
-        setProfile(profileRes.data);
+        setProfile((prev) => ({ ...prev, ...profileRes.data }));
         const h24 = shiftRes.data.expectedCheckinHour;
         setLocalCheckin({ hour: h24 % 12 || 12, minute: shiftRes.data.expectedCheckinMinute, period: h24 >= 12 ? 'PM' : 'AM' });
       } catch (err) { console.error(err); }
@@ -190,6 +227,48 @@ export default function SettingsPage() {
                       className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                     />
                   </div>
+
+                  {/* Company Logo */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-slate-600">Company Logo</label>
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {profile.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={profile.logo} alt="Company logo" className="w-full h-full object-contain" />
+                        ) : (
+                          <Building2 size={18} className="text-slate-300" />
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors">
+                            Upload Logo
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleLogoChange}
+                              className="hidden"
+                            />
+                          </label>
+                          {profile.logo && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveLogo}
+                              className="text-[11px] font-bold text-slate-400 hover:text-red-500 px-2 py-1.5 rounded-lg transition-colors"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400">
+                          PNG recommended for a crisp look with a transparent background. Other formats are allowed too — max {MAX_LOGO_SIZE_MB}MB.
+                        </p>
+                        {logoError && <p className="text-[10px] text-red-500 font-medium">{logoError}</p>}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold text-slate-600">Timezone</label>
                     <div className="relative">

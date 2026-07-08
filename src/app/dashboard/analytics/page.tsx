@@ -108,53 +108,7 @@ function minutesToClock(mins: number) {
   return `${h12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
-/**
- * Fetches one day's logs with retry-on-429 (exponential backoff, honors
- * Retry-After if the server sends one).
- */
-async function fetchDayWithRetry(date: string, maxRetries = 3): Promise<readonly [string, AttendanceLog[]]> {
-  let attempt = 0;
-  for (;;) {
-    try {
-      const res = await api.get(`/attendance/logs/daily?date=${date}`);
-      return [date, res.data] as const;
-    } catch (err) {
-      const apiErr = err as { response?: { status?: number; headers?: Record<string, string | undefined> } };
-      const status = apiErr?.response?.status;
-      if (status === 429 && attempt < maxRetries) {
-        const retryAfterHeader = apiErr?.response?.headers?.['retry-after'];
-        const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : null;
-        const backoffMs = retryAfterMs ?? 500 * 2 ** attempt;
-        attempt += 1;
-        await sleep(backoffMs);
-        continue;
-      }
-      throw err;
-    }
-  }
-}
-
-/**
- * Runs async tasks with a bounded number of in-flight requests at once,
- * instead of firing all of them simultaneously (which is what triggered
- * the 429s on ranges of 30+ days).
- */
-async function fetchLogsInBatches(
-  dates: string[],
-  concurrency: number
-): Promise<Array<readonly [string, AttendanceLog[]]>> {
-  const results: Array<readonly [string, AttendanceLog[]]> = [];
-  for (let i = 0; i < dates.length; i += concurrency) {
-    const batch = dates.slice(i, i + concurrency);
-    const batchResults = await Promise.all(batch.map((d) => fetchDayWithRetry(d)));
-    results.push(...batchResults);
-  }
-  return results;
-}
 
 function StatCard({
   label, value, icon: Icon, tone,
@@ -188,7 +142,6 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle?: st
 }
 
 const MAX_RANGE_DAYS = 92;
-const FETCH_CONCURRENCY = 6; // in-flight requests per batch — tune to your backend's rate limit
 
 export default function AnalyticsPage() {
   const { user } = useAuthStore();
@@ -250,7 +203,7 @@ export default function AnalyticsPage() {
   // grows large in practice, a dedicated `/attendance/logs/range` endpoint
   // would be far cheaper than this fan-out.
   useEffect(() => {
-    if (rangeError) return; // invalid range — nothing to fetch, UI shows the error instead of the loader
+    if (rangeError) return;
 
     let discarded = false;
 
@@ -258,11 +211,9 @@ export default function AnalyticsPage() {
       setLoading(true);
       setFetchError(null);
       try {
-        const results = await fetchLogsInBatches(dateList, FETCH_CONCURRENCY);
+        const res = await api.get(`/attendance/logs/range?from=${range.from}&to=${range.to}`);
         if (discarded) return;
-        const map: Record<string, AttendanceLog[]> = {};
-        results.forEach(([d, data]) => { map[d] = data; });
-        setLogsByDate(map);
+        setLogsByDate(res.data);
       } catch (err) {
         if (discarded) return;
         console.error('Failed to fetch attendance logs:', err);
@@ -279,7 +230,7 @@ export default function AnalyticsPage() {
 
     loadLogs();
     return () => { discarded = true; };
-  }, [dateList, rangeError]);
+  }, [range.from, range.to, rangeError]);
 
   const employeeDeptMap = useMemo(() => {
     const map = new Map<string, string>();

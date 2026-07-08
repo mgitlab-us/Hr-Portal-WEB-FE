@@ -60,9 +60,13 @@ export default function ShiftsPage() {
     e.preventDefault();
     setSubmitting(true);
     const payload = {
-      ...newShift,
+      name: newShift.name,
       workMinutesPerDay: newShift.workHours * 60 + newShift.workMinutes,
       breakMinutesAllocated: newShift.breakHours * 60 + newShift.breakMinutes,
+      gracePeriodMinutes: newShift.gracePeriodMinutes,
+      expectedCheckinHour: newShift.expectedCheckinHour,
+      expectedCheckinMinute: newShift.expectedCheckinMinute,
+      isDefault: newShift.isDefault,
     };
 
     try {
