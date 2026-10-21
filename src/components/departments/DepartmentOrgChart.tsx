@@ -34,13 +34,13 @@ export function DepartmentOrgChart({
         <ul className="org-tree">
           <li>
             {/* Company node — root of the tree */}
-            <div className="inline-flex items-center gap-2.5 sm:gap-3 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl bg-slate-800 shadow-md shadow-slate-800/10 min-w-[160px] sm:min-w-[200px] text-left">
+            <div className="inline-flex items-center gap-2.5 sm:gap-3 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl bg-blue-600 shadow-md shadow-blue-900/10 min-w-[160px] sm:min-w-[200px] text-left">
               <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
                 <Building2 size={15} className="text-white" />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white leading-none truncate">{companyName}</p>
-                <p className="text-[10px] text-slate-300 mt-1.5 uppercase tracking-widest whitespace-nowrap">
+                <p className="text-[10px] text-blue-100 mt-1.5 uppercase tracking-widest whitespace-nowrap">
                   {totalEmployees} {totalEmployees === 1 ? 'employee' : 'employees'} · {departments.length}{' '}
                   {departments.length === 1 ? 'dept' : 'depts'}
                 </p>
@@ -51,10 +51,10 @@ export function DepartmentOrgChart({
               <ul>
                 {departments.map((dept) => (
                   <li key={dept.id}>
-                    <div className="group relative inline-flex flex-col items-start gap-2 sm:gap-2.5 px-3 py-3 sm:px-4 sm:py-3.5 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-[#1D9E75]/40 hover:shadow-md transition-all min-w-[150px] sm:min-w-[200px] text-left">
+                    <div className="group relative inline-flex flex-col items-start gap-2 sm:gap-2.5 px-3 py-3 sm:px-4 sm:py-3.5 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-[#2563EB]/40 hover:shadow-md transition-all min-w-[150px] sm:min-w-[200px] text-left">
                       <div className="flex items-center gap-2 sm:gap-2.5 w-full">
-                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
-                          <Building2 size={13} className="text-[#0F6E56]" />
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFF6FF] flex items-center justify-center flex-shrink-0">
+                          <Building2 size={13} className="text-[#1D4ED8]" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-slate-700 truncate">{dept.name}</p>
@@ -78,14 +78,14 @@ export function DepartmentOrgChart({
                       <div className="absolute -top-2.5 -right-2.5 hidden group-hover:flex items-center gap-1">
                         <button
                           onClick={() => onEditDepartment(dept)}
-                          className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-[#0F6E56] hover:border-[#1D9E75]/40 rounded-full shadow-sm transition-colors"
+                          className="p-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 rounded-full shadow-sm transition-colors"
                           aria-label={`Edit ${dept.name}`}
                         >
                           <Pencil size={11} />
                         </button>
                         <button
                           onClick={() => onDeleteDepartment(dept)}
-                          className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 rounded-full shadow-sm transition-colors"
+                          className="p-1.5 bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-full shadow-sm transition-colors"
                           aria-label={`Delete ${dept.name}`}
                         >
                           <Trash2 size={11} />
@@ -100,7 +100,7 @@ export function DepartmentOrgChart({
                   <button
                     type="button"
                     onClick={onAddDepartment}
-                    className="inline-flex flex-col items-center justify-center gap-1.5 px-3 py-3 sm:px-4 sm:py-3.5 rounded-xl border border-dashed border-slate-300 text-slate-400 hover:text-[#0F6E56] hover:border-[#1D9E75]/50 hover:bg-[#E1F5EE]/40 transition-colors min-w-[150px] sm:min-w-[200px] min-h-[68px] sm:min-h-[76px]"
+                    className="inline-flex flex-col items-center justify-center gap-1.5 px-3 py-3 sm:px-4 sm:py-3.5 rounded-xl border border-dashed border-blue-300 bg-blue-50 text-blue-700 hover:border-blue-400 hover:bg-blue-100 transition-colors min-w-[150px] sm:min-w-[200px] min-h-[68px] sm:min-h-[76px]"
                   >
                     <Plus size={16} />
                     <span className="text-xs font-medium">Add department</span>

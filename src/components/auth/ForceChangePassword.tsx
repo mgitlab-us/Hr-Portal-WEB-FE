@@ -56,7 +56,7 @@ export default function ForceChangePassword() {
         
         {/* Header */}
         <div className="bg-slate-50 px-8 py-10 text-center border-b border-slate-100">
-          <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-indigo-100 shadow-xl">
+          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-blue-100 shadow-xl">
             <Lock className="text-white" size={24} />
           </div>
           <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Set Secure Password</h2>
@@ -96,7 +96,7 @@ export default function ForceChangePassword() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
                     placeholder="Min. 8 characters"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all font-medium placeholder:text-slate-400"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all font-medium placeholder:text-slate-400"
                   />
                 </div>
 
@@ -108,7 +108,7 @@ export default function ForceChangePassword() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                     placeholder="Repeat new password"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all font-medium placeholder:text-slate-400"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all font-medium placeholder:text-slate-400"
                   />
                 </div>
               </div>
@@ -116,7 +116,7 @@ export default function ForceChangePassword() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
+                className="w-full btn-primary font-semibold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2"
               >
                 {loading ? <Loader2 size={18} className="animate-spin" /> : "Update & Continue"}
               </button>

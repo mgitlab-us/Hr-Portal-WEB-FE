@@ -106,7 +106,7 @@ export default function LeavesPage() {
         {/* Body */}
         {loading ? (
           <div className="h-64 flex items-center justify-center">
-            <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+            <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
           </div>
         ) : requests.length === 0 ? (
           <div className="bg-white border border-slate-100 rounded-xl p-16 flex flex-col items-center text-center gap-3">
@@ -156,8 +156,8 @@ export default function LeavesPage() {
                     {/* Leave Type & Dates */}
                     <div className="flex-1 flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-8">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
-                          <Plane size={14} className="text-indigo-500" />
+                        <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+                          <Plane size={14} className="text-blue-500" />
                         </div>
                         <div>
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest leading-none mb-1">
@@ -195,7 +195,7 @@ export default function LeavesPage() {
                       <button
                         onClick={() => handleReview(req.id, 'REJECTED')}
                         disabled={isProcessing}
-                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-lg hover:border-red-200 hover:text-red-600 hover:bg-red-50 transition-all disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold btn-danger-ghost border border-rose-200 bg-rose-50 rounded-lg"
                       >
                         <X size={13} />
                         Reject
@@ -203,7 +203,7 @@ export default function LeavesPage() {
                       <button
                         onClick={() => handleReview(req.id, 'APPROVED')}
                         disabled={isProcessing}
-                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-all disabled:opacity-50 shadow-sm shadow-indigo-100"
+                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold btn-primary rounded-lg"
                       >
                         {isProcessing
                           ? <Loader2 size={13} className="animate-spin" />

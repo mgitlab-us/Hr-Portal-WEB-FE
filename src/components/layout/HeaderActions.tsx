@@ -195,7 +195,7 @@ export default function HeaderActions({
               {notifications.length > 0 && (
                 <button
                   onClick={() => onNotificationsChange([])}
-                  className="text-xs font-semibold text-ink-faint transition-colors hover:text-ink"
+                  className="text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
                 >
                   Clear all
                 </button>
@@ -224,7 +224,7 @@ export default function HeaderActions({
                       </div>
                       <button
                         onClick={() => onNotificationsChange(notifications.filter((n) => n.id !== notif.id))}
-                        className="absolute right-3 top-3 text-ink-faint transition-colors hover:text-ink"
+                        className="absolute right-3 top-3 rounded-md p-1 text-blue-500 transition-colors hover:bg-blue-50 hover:text-blue-700"
                         aria-label="Remove notification"
                       >
                         <X size={13} />

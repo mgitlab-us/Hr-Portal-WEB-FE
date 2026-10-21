@@ -21,7 +21,7 @@ function NumInput({ label, value, onChange }: { label: string; value: number; on
         type="number"
         value={value}
         onChange={(e) => onChange(parseInt(e.target.value) || 0)}
-        className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 text-center font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+        className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 text-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
       />
     </div>
   );
@@ -224,7 +224,7 @@ export default function SettingsPage() {
                       value={profile.name}
                       onChange={(e) => setProfile({ ...profile, name: e.target.value })}
                       placeholder="e.g. Acme Corp"
-                      className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                     />
                   </div>
 
@@ -242,7 +242,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="flex-1 space-y-1.5">
                         <div className="flex items-center gap-2">
-                          <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors">
+                          <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors">
                             Upload Logo
                             <input
                               type="file"
@@ -255,7 +255,7 @@ export default function SettingsPage() {
                             <button
                               type="button"
                               onClick={handleRemoveLogo}
-                              className="text-[11px] font-bold text-slate-400 hover:text-red-500 px-2 py-1.5 rounded-lg transition-colors"
+                              className="text-[11px] font-bold btn-danger-ghost px-2 py-1.5 rounded-lg"
                             >
                               Remove
                             </button>
@@ -276,7 +276,7 @@ export default function SettingsPage() {
                       <select
                         value={profile.timezone}
                         onChange={(e) => setProfile({ ...profile, timezone: e.target.value })}
-                        className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 pl-8 pr-7 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                        className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 pl-8 pr-7 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                       >
                         <option value="Asia/Karachi">Asia/Karachi (PKT)</option>
                         <option value="Asia/Dubai">Asia/Dubai (GST)</option>
@@ -292,13 +292,13 @@ export default function SettingsPage() {
                   <div className="pt-4 border-t border-slate-50 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <ShieldCheck size={12} className="text-indigo-500" />
+                        <ShieldCheck size={12} className="text-blue-500" />
                         <h4 className="text-xs font-bold text-slate-700 uppercase tracking-tight">Geofence (Office Parameter)</h4>
                       </div>
                       <button
                         onClick={getCurrentLocation}
                         disabled={gettingLocation}
-                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded transition-colors"
+                        className="text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
                       >
                         {gettingLocation ? 'Locating...' : 'Pin My Location'}
                       </button>
@@ -312,7 +312,7 @@ export default function SettingsPage() {
                           step="0.0001"
                           value={profile.officeLat}
                           onChange={(e) => setProfile({ ...profile, officeLat: parseFloat(e.target.value) })}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -322,7 +322,7 @@ export default function SettingsPage() {
                           step="0.0001"
                           value={profile.officeLng}
                           onChange={(e) => setProfile({ ...profile, officeLng: parseFloat(e.target.value) })}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                         />
                       </div>
                     </div>
@@ -337,7 +337,7 @@ export default function SettingsPage() {
                           step="10"
                           value={profile.officeRadius}
                           onChange={(e) => setProfile({ ...profile, officeRadius: parseInt(e.target.value) })}
-                          className="flex-1 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer"
+                          className="flex-1 accent-blue-600 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer"
                         />
                         <div className="w-16 shrink-0 bg-white border border-slate-200 rounded px-2 py-1 text-center">
                           <span className="text-xs font-bold text-slate-700">{profile.officeRadius}m</span>
@@ -352,7 +352,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleSaveProfile}
                 disabled={savingProfile}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
               >
                 {savingProfile ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                 Save Company Profile
@@ -378,7 +378,7 @@ export default function SettingsPage() {
                       <select
                         value={localCheckin.hour}
                         onChange={(e) => setLocalCheckin({ ...localCheckin, hour: parseInt(e.target.value) })}
-                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                       >
                         {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
                           <option key={h} value={h}>{h}</option>
@@ -388,7 +388,7 @@ export default function SettingsPage() {
                       <select
                         value={localCheckin.minute}
                         onChange={(e) => setLocalCheckin({ ...localCheckin, minute: parseInt(e.target.value) })}
-                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                       >
                         {[0, 15, 30, 45].map((m) => (
                           <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
@@ -397,7 +397,7 @@ export default function SettingsPage() {
                       <select
                         value={localCheckin.period}
                         onChange={(e) => setLocalCheckin({ ...localCheckin, period: e.target.value as 'AM' | 'PM' })}
-                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                       >
                         <option value="AM">AM</option>
                         <option value="PM">PM</option>
@@ -439,7 +439,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleSaveShift}
                 disabled={savingShift}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
               >
                 {savingShift ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                 Save Shift Rules

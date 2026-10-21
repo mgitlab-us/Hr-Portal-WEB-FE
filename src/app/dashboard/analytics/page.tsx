@@ -377,7 +377,7 @@ export default function AnalyticsPage() {
                       from: toISODate(new Date(Date.now() - (preset.days - 1) * 24 * 60 * 60 * 1000)),
                       to: today,
                     })}
-                    className="px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-white rounded-md transition-colors"
+                    className="rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-700"
                   >
                     {preset.label}
                   </button>

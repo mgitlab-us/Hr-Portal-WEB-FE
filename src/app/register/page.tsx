@@ -71,12 +71,12 @@ export default function RegisterPage() {
         {/* Left Side: Brand/Marketing */}
         <div className="hidden lg:flex flex-col justify-between bg-slate-900 p-12 text-white">
           <div>
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center mb-8 shadow-indigo-500/20 shadow-xl">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center mb-8 shadow-blue-500/20 shadow-xl">
               <ShieldCheck size={24} className="text-white" />
             </div>
             <h1 className="text-4xl font-bold tracking-tight mb-4">
               Building a <br />
-              <span className="text-indigo-400">Better Workplace</span>
+              <span className="text-blue-400">Better Workplace</span>
             </h1>
             <p className="text-slate-400 text-lg max-w-sm">
               Empower your team with professional attendance tracking and HR management.
@@ -85,7 +85,7 @@ export default function RegisterPage() {
 
           <div className="space-y-6">
             <div className="flex gap-4">
-              <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 text-indigo-400">
+              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 text-blue-400">
                 <Globe size={20} />
               </div>
               <div>
@@ -94,7 +94,7 @@ export default function RegisterPage() {
               </div>
             </div>
             <div className="flex gap-4">
-              <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 text-indigo-400">
+              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 text-blue-400">
                 <ShieldCheck size={20} />
               </div>
               <div>
@@ -112,7 +112,7 @@ export default function RegisterPage() {
         {/* Right Side: Form */}
         <div className="p-8 lg:p-12">
           <div className="mb-10 lg:hidden flex justify-center">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-indigo-100 shadow-xl">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-blue-100 shadow-xl">
               <ShieldCheck size={24} className="text-white" />
             </div>
           </div>
@@ -142,7 +142,7 @@ export default function RegisterPage() {
                     value={formData.companyName}
                     onChange={handleChange}
                     placeholder="Acme Corp"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                   />
                 </div>
               </div>
@@ -158,7 +158,7 @@ export default function RegisterPage() {
                     required
                     value={formData.timezone}
                     onChange={handleChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all appearance-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all appearance-none"
                   >
                     <option value="UTC">UTC (Default)</option>
                     <option value="America/New_York">New York (EST/EDT)</option>
@@ -186,7 +186,7 @@ export default function RegisterPage() {
                   value={formData.adminName}
                   onChange={handleChange}
                   placeholder="John Doe"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                 />
               </div>
             </div>
@@ -204,7 +204,7 @@ export default function RegisterPage() {
                   value={formData.adminEmail}
                   onChange={handleChange}
                   placeholder="john@company.com"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                 />
               </div>
             </div>
@@ -219,12 +219,12 @@ export default function RegisterPage() {
                   value={formData.adminPassword}
                   onChange={handleChange}
                   placeholder="Min. 8 characters"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost rounded-md"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -234,7 +234,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-4 rounded-xl transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 mt-4"
+              className="w-full btn-primary font-semibold py-4 rounded-xl shadow-lg shadow-blue-100 flex items-center justify-center gap-2 mt-4"
             >
               {loading ? <Loader2 size={18} className="animate-spin" /> : (
                 <>
@@ -246,7 +246,7 @@ export default function RegisterPage() {
 
             <p className="text-center text-sm text-slate-500 mt-6">
               Already have an account?{' '}
-              <Link href="/login" className="text-indigo-600 font-semibold hover:underline">
+              <Link href="/login" className="text-blue-600 font-semibold hover:underline">
                 Sign In
               </Link>
             </p>

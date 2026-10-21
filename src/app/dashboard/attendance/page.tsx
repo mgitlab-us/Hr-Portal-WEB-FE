@@ -234,7 +234,7 @@ export default function AttendanceLogsPage() {
             <button
               onClick={() => handleExport('excel')}
               disabled={!!exporting}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 btn-secondary text-sm font-medium rounded-xl"
             >
               {exporting === 'excel'
                 ? <Loader2 size={13} className="animate-spin" />
@@ -244,7 +244,7 @@ export default function AttendanceLogsPage() {
             <button
               onClick={() => handleExport('pdf')}
               disabled={!!exporting}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50 shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-2 btn-primary text-sm font-medium rounded-xl"
             >
               {exporting === 'pdf'
                 ? <Loader2 size={13} className="animate-spin" />
@@ -273,12 +273,12 @@ export default function AttendanceLogsPage() {
                 placeholder="Search staff name or ID…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]/15 focus:border-[#1D9E75]/40 transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB]/15 focus:border-[#2563EB]/40 transition-all"
               />
               {search && (
                 <button
                   onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost rounded-md"
                 >
                   <X size={12} />
                 </button>
@@ -428,10 +428,7 @@ export default function AttendanceLogsPage() {
                                   alert('Failed to download report.');
                                 }
                               }}
-                              className="p-1.5 rounded-lg text-slate-400 transition-all hover:opacity-80"
-                              style={{ color: undefined }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = TONES.teal.icon; e.currentTarget.style.backgroundColor = TONES.teal.bg; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.color = ''; e.currentTarget.style.backgroundColor = ''; }}
+                              className="p-1.5 rounded-lg btn-ghost"
                               title="Download Monthly Report"
                             >
                               <FileText size={14} />

@@ -195,12 +195,12 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     {employee?.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">#{employee?.profile?.employeeCode || 'EMP-000'}</p>
+                <p className="text-xs text-slate-400 mt-0.5">#{employee?.profile?.employeeCode || 'EMP-000'}</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-ghost rounded-lg"
             >
               <ChevronUp size={13} />
               Collapse
@@ -242,13 +242,13 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 py-2.5 text-xs font-bold transition-all relative ${
-                    activeTab === tab.id ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
+                    activeTab === tab.id ? 'text-blue-700' : 'text-slate-400 hover:text-blue-700'
                   }`}
                 >
                   <tab.icon size={13} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
                   {tab.label}
                   {activeTab === tab.id && (
-                    <motion.div layoutId="panelTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />
+                    <motion.div layoutId="panelTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
                   )}
                 </button>
               ))}
@@ -271,7 +271,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     <input
                       value={editInfo.designation}
                       onChange={e => setEditInfo(p => ({ ...p, designation: e.target.value }))}
-                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none"
+                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -281,7 +281,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                       value={editInfo.phone}
                       onChange={e => setEditInfo(p => ({ ...p, phone: e.target.value }))}
                       placeholder="+92 300 1234567"
-                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none"
+                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -289,7 +289,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     <select
                       value={editInfo.departmentId}
                       onChange={e => setEditInfo(p => ({ ...p, departmentId: e.target.value }))}
-                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none"
+                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
                     >
                       <option value="">Unassigned</option>
                       {departments.map((d) => (
@@ -302,7 +302,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     <select
                       value={editInfo.shiftProfileId}
                       onChange={e => setEditInfo(p => ({ ...p, shiftProfileId: e.target.value }))}
-                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none"
+                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
                     >
                       <option value="">Default (Company settings)</option>
                       {shifts.map((s) => (
@@ -314,7 +314,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
 
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <CreditCard size={13} className="text-indigo-500" />
+                    <CreditCard size={13} className="text-blue-500" />
                     <h4 className="text-xs font-bold text-slate-700 uppercase tracking-tight">Bank & Payroll</h4>
                   </div>
                   <div className="space-y-1.5">
@@ -337,7 +337,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                       <input
                         value={editInfo.bankName}
                         onChange={e => setEditInfo(p => ({ ...p, bankName: e.target.value }))}
-                        className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-indigo-400 transition-all"
+                        className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-400 transition-all"
                         placeholder="e.g. HBL, Alfalah…"
                       />
                     </div>
@@ -349,7 +349,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                       <input
                         value={editInfo.accountNumber}
                         onChange={e => setEditInfo(p => ({ ...p, accountNumber: e.target.value }))}
-                        className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-indigo-400 transition-all"
+                        className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-400 transition-all"
                         placeholder="Bank account or IBAN"
                       />
                     </div>
@@ -357,7 +357,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                   <button
                     onClick={handleUpdateProfile}
                     disabled={saving}
-                    className="w-full inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
+                    className="w-full inline-flex items-center justify-center gap-2 btn-primary text-sm font-bold py-2.5 rounded-lg"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Update Record
@@ -375,24 +375,24 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                 transition={{ duration: 0.15 }}
                 className="space-y-5"
               >
-                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 flex items-center justify-between">
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">
+                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">
                       {format(new Date(), 'MMMM yyyy')} Ledger
                     </p>
-                    <p className="text-lg font-black text-indigo-900">
+                    <p className="text-lg font-black text-blue-900">
                       Rs. {Number(editInfo.baseSalary).toLocaleString() || '0'}
                     </p>
                   </div>
                   {currentMonthPaid ? (
-                    <div className="px-3 py-1 bg-indigo-200 text-indigo-800 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    <div className="px-3 py-1 bg-blue-200 text-blue-800 rounded-full text-[10px] font-black uppercase tracking-wider">
                       Paid
                     </div>
                   ) : (
                     <button
                       onClick={handleMarkPaid}
                       disabled={paying}
-                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-all disabled:opacity-50"
+                      className="px-5 py-2.5 btn-primary text-xs font-black rounded-xl"
                     >
                       {paying ? <Loader2 size={12} className="animate-spin" /> : 'MARK AS PAID'}
                     </button>

@@ -77,7 +77,7 @@ function RoleBadge({ role }: { role: Employee['role'] }) {
     );
   if (role === 'ADMIN')
     return (
-      <span className="inline-flex items-center text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
+      <span className="inline-flex items-center text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
         Admin
       </span>
     );
@@ -97,7 +97,7 @@ function Field({
       <label className="block text-xs font-medium text-slate-600">{label}</label>
       <input
         {...props}
-        className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+        className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
       />
     </div>
   );
@@ -267,7 +267,7 @@ export default function EmployeesPage() {
           </div>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
           >
             <UserPlus size={14} />
             Add Employee
@@ -286,12 +286,12 @@ export default function EmployeesPage() {
                 placeholder="Search name, email or ID…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
               />
               {search && (
                 <button
                   onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost rounded-md"
                 >
                   <X size={12} />
                 </button>
@@ -302,7 +302,7 @@ export default function EmployeesPage() {
                 <select
                   value={departmentFilter}
                   onChange={(e) => setDepartmentFilter(e.target.value)}
-                  className="appearance-none bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                  className="appearance-none bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                 >
                   <option value="">All departments</option>
                   {departments.map((d) => (
@@ -406,11 +406,11 @@ export default function EmployeesPage() {
                           </td>
                           <td className="px-5 py-3.5 hidden lg:table-cell">
                             <div className="flex flex-col gap-1">
-                              <span className="text-xs text-slate-400 font-mono">
+                              <span className="text-xs text-slate-400 tabular-nums">
                                 {emp.profile?.employeeCode || '—'}
                               </span>
                               {payrollStatus.find(p => p.id === emp.id)?.payment?.status === 'PAID' ? (
-                                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">
+                                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-blue-500 uppercase tracking-tighter">
                                    <DollarSign size={8} /> Paid
                                  </span>
                               ) : (
@@ -428,7 +428,7 @@ export default function EmployeesPage() {
                                     e.stopPropagation();
                                     setOpenMenuId(openMenuId === emp.id ? null : emp.id);
                                   }}
-                                  className={`p-1.5 rounded-md transition-all ${openMenuId === emp.id ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                                  className={`p-1.5 rounded-md btn-ghost ${openMenuId === emp.id ? 'bg-blue-50 text-blue-700' : ''}`}
                                 >
                                   <MoreVertical size={14} />
                                 </button>
@@ -448,9 +448,9 @@ export default function EmployeesPage() {
                                           setOpenMenuId(null);
                                           toggleExpand(emp.id);
                                         }}
-                                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
+                                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
                                       >
-                                        <FileText size={12} className="text-indigo-500" />
+                                        <FileText size={12} className="text-blue-500" />
                                         {isExpanded ? 'Collapse Profile' : 'View Full Profile'}
                                       </button>
                                       {canManageEmployee(emp) && (
@@ -461,7 +461,7 @@ export default function EmployeesPage() {
                                               setOpenMenuId(null);
                                               setConfirmModal({ type: 'DEACTIVATE', id: emp.id, name: emp.name });
                                             }}
-                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors"
                                           >
                                             <Power size={12} className={emp.isActive ? 'text-amber-500' : 'text-emerald-500'} />
                                             {emp.isActive ? 'Deactivate Account' : 'Activate Account'}
@@ -471,7 +471,7 @@ export default function EmployeesPage() {
                                               setOpenMenuId(null);
                                               setConfirmModal({ type: 'ARCHIVE', id: emp.id, name: emp.name });
                                             }}
-                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
                                           >
                                             <Trash2 size={12} />
                                             Archive Account (Delete)
@@ -538,13 +538,13 @@ export default function EmployeesPage() {
             <div className="flex border-t border-slate-100">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors border-r border-slate-100"
+                className="flex-1 px-4 py-3 text-sm font-semibold btn-ghost border-r border-slate-100"
               >
                 Cancel
               </button>
               <button
                 onClick={() => confirmModal.type === 'ARCHIVE' ? handleArchive(confirmModal.id) : toggleStatus(confirmModal.id)}
-                className={`flex-1 px-4 py-3 text-sm font-bold text-white transition-colors ${confirmModal.type === 'ARCHIVE' ? 'bg-red-500 hover:bg-red-600' : 'bg-slate-800 hover:bg-slate-900'}`}
+                className={`flex-1 px-4 py-3 text-sm font-bold ${confirmModal.type === 'ARCHIVE' ? 'btn-danger' : 'btn-primary'}`}
               >
                 Confirm
               </button>
@@ -568,7 +568,7 @@ export default function EmployeesPage() {
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                className="p-1.5 btn-ghost rounded-md"
               >
                 <X size={15} />
               </button>
@@ -626,7 +626,7 @@ export default function EmployeesPage() {
                     <select
                       value={newEmployee.departmentId}
                       onChange={set('departmentId')}
-                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                     >
                       <option value="">Unassigned</option>
                       {departments.map((d) => (
@@ -648,10 +648,10 @@ export default function EmployeesPage() {
                     set('employeeCode')(e);
                   }}
                   placeholder="Auto-generated if blank (e.g. ASE-SOF-001)"
-                  className={`w-full bg-white border rounded-lg py-2.5 px-3 text-sm font-mono text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full bg-white border rounded-lg py-2.5 px-3 text-sm tabular-nums text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
                     employeeCodeError
                       ? 'border-red-400 ring-red-100 ring-2'
-                      : 'border-slate-200 focus:ring-indigo-500/20 focus:border-indigo-400'
+                      : 'border-slate-200 focus:ring-blue-500/20 focus:border-blue-400'
                   }`}
                 />
                 {employeeCodeError ? (
@@ -669,7 +669,7 @@ export default function EmployeesPage() {
                     <select
                       value={newEmployee.role}
                       onChange={set('role')}
-                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                     >
                       <option value="EMPLOYEE">Employee</option>
                       <option value="ADMIN">Admin (HR Manager)</option>
@@ -685,7 +685,7 @@ export default function EmployeesPage() {
                     <select
                       value={newEmployee.shiftProfileId}
                       onChange={set('shiftProfileId')}
-                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                     >
                       <option value="">Default (Company settings)</option>
                       {shifts.map(s => (
@@ -702,14 +702,14 @@ export default function EmployeesPage() {
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium btn-ghost rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex items-center gap-2 px-5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                  className="inline-flex items-center gap-2 px-5 py-2 btn-primary text-sm font-medium rounded-lg"
                 >
                   {submitting && <Loader2 size={13} className="animate-spin" />}
                   Create Employee

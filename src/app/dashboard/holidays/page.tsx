@@ -107,7 +107,7 @@ export default function HolidaysPage() {
           </div>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
           >
             <Plus size={14} />
             Add Holiday
@@ -117,7 +117,7 @@ export default function HolidaysPage() {
         {/* ── Weekends Section */}
         <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
               <Calendar size={18} />
             </div>
             <div>
@@ -136,8 +136,8 @@ export default function HolidaysPage() {
                   className={cn(
                     "px-5 py-2.5 rounded-xl text-sm font-medium transition-all border",
                     active
-                      ? "bg-slate-800 border-slate-800 text-white shadow-md shadow-slate-200"
-                      : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                      ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-200"
+                      : "border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100"
                   )}
                 >
                   {day}
@@ -197,7 +197,7 @@ export default function HolidaysPage() {
                         <td className="px-6 py-4 text-right">
                           <button
                             onClick={() => handleDeleteHoliday(h.id)}
-                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            className="p-2 btn-danger-ghost rounded-lg"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -220,7 +220,7 @@ export default function HolidaysPage() {
               <h2 className="text-lg font-semibold text-slate-800">Add Holiday</h2>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
+                className="p-2 btn-ghost rounded-lg"
               >
                 <X size={18} />
               </button>
@@ -234,7 +234,7 @@ export default function HolidaysPage() {
                   value={newHoliday.name}
                   onChange={(e) => setNewHoliday(p => ({ ...p, name: e.target.value }))}
                   placeholder="e.g. Eid-ul-Adha"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-700 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none transition-all"
                 />
               </div>
 
@@ -245,7 +245,7 @@ export default function HolidaysPage() {
                   type="date"
                   value={newHoliday.date}
                   onChange={(e) => setNewHoliday(p => ({ ...p, date: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-700 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none transition-all"
                 />
               </div>
 
@@ -253,14 +253,14 @@ export default function HolidaysPage() {
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                  className="flex-1 px-4 py-3 text-sm font-semibold btn-ghost rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-[1.5] bg-slate-800 text-white px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-slate-200 disabled:opacity-60"
+                  className="flex-[1.5] btn-primary px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
                 >
                   {submitting && <Loader2 size={14} className="animate-spin" />}
                   Schedule Holiday

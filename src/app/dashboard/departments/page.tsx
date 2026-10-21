@@ -145,7 +145,7 @@ export default function DepartmentsPage() {
               <button
                 onClick={() => setView('chart')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  view === 'chart' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                  view === 'chart' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-blue-50 hover:text-blue-700'
                 }`}
                 aria-pressed={view === 'chart'}
               >
@@ -155,7 +155,7 @@ export default function DepartmentsPage() {
               <button
                 onClick={() => setView('table')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  view === 'table' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                  view === 'table' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-blue-50 hover:text-blue-700'
                 }`}
                 aria-pressed={view === 'table'}
               >
@@ -165,7 +165,7 @@ export default function DepartmentsPage() {
             </div>
             <button
               onClick={openCreate}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
             >
               <Plus size={14} />
               Add Department
@@ -182,7 +182,7 @@ export default function DepartmentsPage() {
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Building2 size={28} className="mb-3 text-slate-300" />
               <p className="text-sm">No departments yet</p>
-              <button onClick={openCreate} className="mt-3 text-xs text-indigo-600 hover:underline">
+              <button onClick={openCreate} className="mt-3 text-xs font-semibold btn-ghost rounded-md">
                 Create your first department
               </button>
             </div>
@@ -216,8 +216,8 @@ export default function DepartmentsPage() {
                     <tr key={dept.id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                            <Building2 size={14} className="text-indigo-500" />
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <Building2 size={14} className="text-blue-500" />
                           </div>
                           <p className="text-sm font-medium text-slate-700">{dept.name}</p>
                         </div>
@@ -247,13 +247,13 @@ export default function DepartmentsPage() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => openEdit(dept)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                            className="p-1.5 btn-ghost rounded-md"
                           >
                             <Pencil size={14} />
                           </button>
                           <button
                             onClick={() => setDeleteTarget(dept)}
-                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            className="p-1.5 btn-danger-ghost rounded-md"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -277,7 +277,7 @@ export default function DepartmentsPage() {
               </h2>
               <button
                 onClick={() => setModal(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md"
+                className="p-1.5 btn-ghost rounded-md"
               >
                 <X size={15} />
               </button>
@@ -290,7 +290,7 @@ export default function DepartmentsPage() {
                   value={form.name}
                   onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                   placeholder="e.g. Engineering"
-                  className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                  className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                 />
               </div>
               <div className="space-y-1.5">
@@ -299,7 +299,7 @@ export default function DepartmentsPage() {
                   <select
                     value={form.adminId}
                     onChange={(e) => setForm((p) => ({ ...p, adminId: e.target.value }))}
-                    className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                   >
                     <option value="">Unassigned</option>
                     {admins.map((a) => (
@@ -318,14 +318,14 @@ export default function DepartmentsPage() {
                 <button
                   type="button"
                   onClick={() => setModal(null)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-4 py-2 text-sm font-medium btn-ghost rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex items-center gap-2 px-5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg"
+                  className="inline-flex items-center gap-2 px-5 py-2 btn-primary text-sm font-medium rounded-lg"
                 >
                   {submitting && <Loader2 size={13} className="animate-spin" />}
                   {modal.mode === 'create' ? 'Create' : 'Save Changes'}
@@ -351,14 +351,14 @@ export default function DepartmentsPage() {
             <div className="flex border-t border-slate-100">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50 border-r border-slate-100"
+                className="flex-1 px-4 py-3 text-sm font-semibold btn-ghost border-r border-slate-100"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={submitting}
-                className="flex-1 px-4 py-3 text-sm font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60"
+                className="flex-1 px-4 py-3 text-sm font-bold btn-danger"
               >
                 Delete
               </button>

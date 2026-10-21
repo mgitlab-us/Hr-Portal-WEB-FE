@@ -147,7 +147,7 @@ export default function ShiftsPage() {
 
   // Shared select class — bg-white with explicit text-slate-700 so options are always visible
   const selectCls =
-    'w-full appearance-none bg-white border border-slate-300 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none';
+    'w-full appearance-none bg-white border border-slate-300 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none';
 
   const selectSmCls =
     'w-full appearance-none bg-white border border-slate-300 rounded-lg py-2 px-2 text-sm font-medium text-slate-700 pr-6';
@@ -165,7 +165,7 @@ export default function ShiftsPage() {
           </div>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
           >
             <Plus size={14} />
             Create Shift
@@ -187,7 +187,7 @@ export default function ShiftsPage() {
               <div key={shift.id} className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
                       <Clock size={16} />
                     </div>
                     <div>
@@ -203,14 +203,14 @@ export default function ShiftsPage() {
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleEdit(shift)}
-                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-all"
+                      className="p-1.5 btn-ghost rounded-md"
                       title="Edit shift"
                     >
                       <Pencil size={13} />
                     </button>
                     <button
                       onClick={() => handleDelete(shift.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
+                      className="p-1.5 btn-danger-ghost rounded-md"
                       title="Delete shift"
                     >
                       <Trash2 size={13} />
@@ -251,7 +251,7 @@ export default function ShiftsPage() {
               </h2>
               <button
                 onClick={() => { setIsAddModalOpen(false); setEditingShift(null); }}
-                className="text-slate-400 hover:text-slate-600"
+                className="p-1.5 btn-ghost rounded-md"
               >
                 <X size={16} />
               </button>
@@ -264,7 +264,7 @@ export default function ShiftsPage() {
                   value={newShift.name}
                   onChange={(e) => setShift('name', e.target.value)}
                   placeholder="e.g. Regular Morning"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all"
                 />
               </div>
 
@@ -315,8 +315,8 @@ export default function ShiftsPage() {
                         className={cn(
                           'px-3 py-1 rounded text-[10px] font-bold transition-all',
                           period === p
-                            ? 'bg-white text-indigo-600 shadow-sm'
-                            : 'text-slate-400 hover:text-slate-600',
+                            ? 'bg-white text-blue-700 shadow-sm'
+                            : 'text-slate-500 hover:text-blue-700',
                         )}
                       >
                         {p}
@@ -391,7 +391,7 @@ export default function ShiftsPage() {
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estimated End Time</p>
-                  <p className="text-sm font-bold text-indigo-600 tabular-nums">{getEndTime()}</p>
+                  <p className="text-sm font-bold text-blue-600 tabular-nums">{getEndTime()}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Grace Period</p>
@@ -412,7 +412,7 @@ export default function ShiftsPage() {
                   type="checkbox"
                   checked={newShift.isDefault}
                   onChange={(e) => setNewShift((p) => ({ ...p, isDefault: e.target.checked }))}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-xs text-slate-600 font-medium">Set as default shift for new employees</span>
               </label>
@@ -421,13 +421,13 @@ export default function ShiftsPage() {
                 <button
                   type="button"
                   onClick={() => { setIsAddModalOpen(false); setEditingShift(null); }}
-                  className="px-4 py-2 text-sm text-slate-600"
+                  className="px-4 py-2 text-sm btn-ghost rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   disabled={submitting}
-                  className="bg-slate-800 text-white px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm disabled:opacity-60"
+                  className="px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 btn-primary"
                 >
                   {submitting && <Loader2 size={13} className="animate-spin" />}
                   {editingShift ? 'Save Changes' : 'Create Shift'}
