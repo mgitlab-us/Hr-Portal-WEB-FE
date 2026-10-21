@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, MoreVertical, Trash2, Power, DollarSign } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -193,6 +193,9 @@ export default function EmployeesPage() {
     );
   }, [employees, search, departmentFilter]);
 
+  const expandedEmployee =
+    employees.find((emp) => emp.id === expandedEmployeeId) ?? null;
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -356,11 +359,11 @@ export default function EmployeesPage() {
                     const av = avatarColor(emp.name);
                     const isExpanded = expandedEmployeeId === emp.id;
                     return (
-                      <React.Fragment key={emp.id}>
-                        <tr
-                          onClick={() => toggleExpand(emp.id)}
-                          className={`cursor-pointer transition-colors group ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/60'}`}
-                        >
+                      <tr
+                        key={emp.id}
+                        onClick={() => toggleExpand(emp.id)}
+                        className={`cursor-pointer transition-colors group ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/60'}`}
+                      >
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <div
@@ -485,30 +488,6 @@ export default function EmployeesPage() {
                             )}
                           </td>
                         </tr>
-
-                        <AnimatePresence initial={false}>
-                          {isExpanded && (
-                            <tr>
-                              <td colSpan={6} className="p-0">
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                                  className="overflow-hidden"
-                                >
-                                  <EmployeeDetailsDrawer
-                                    employeeId={emp.id}
-                                    canManage={canManageEmployee(emp)}
-                                    onClose={closeExpanded}
-                                    avatarColor={av}
-                                  />
-                                </motion.div>
-                              </td>
-                            </tr>
-                          )}
-                        </AnimatePresence>
-                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -719,6 +698,18 @@ export default function EmployeesPage() {
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {expandedEmployee && (
+          <EmployeeDetailsDrawer
+            key={expandedEmployee.id}
+            employeeId={expandedEmployee.id}
+            canManage={canManageEmployee(expandedEmployee)}
+            onClose={closeExpanded}
+            avatarColor={avatarColor(expandedEmployee.name)}
+          />
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }

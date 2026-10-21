@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mail, Phone, Calendar, Building2, Briefcase, Clock3,
   CreditCard, History, CheckCircle2, AlertCircle, Loader2,
-  DollarSign, Landmark, Save, ChevronUp
+  DollarSign, Landmark, Save, X
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { format } from 'date-fns';
@@ -116,6 +116,21 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeId]);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
   const handleUpdateProfile = async () => {
     setSaving(true);
     try {
@@ -168,7 +183,29 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
   const shiftName = shifts.find(s => s.id === editInfo.shiftProfileId)?.name;
 
   return (
-    <div className="bg-slate-50/60 border-t border-slate-100 px-6 py-6">
+    <motion.div
+      className="fixed inset-0 z-[70]"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+    >
+      <div
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <motion.aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={employee ? `${employee.name} details` : 'Employee details'}
+        initial={{ x: '-100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '-100%' }}
+        transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+        className="relative flex h-full w-full max-w-2xl flex-col border-r border-slate-200 bg-slate-50 shadow-2xl"
+      >
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6">
       {loading ? (
         <div className="flex flex-col items-center justify-center h-40 text-slate-400">
           <Loader2 size={20} className="animate-spin mb-2" />
@@ -177,18 +214,18 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
       ) : (
         <>
           {/* Header */}
-          <div className="flex items-start justify-between mb-5">
-            <div className="flex items-center gap-4">
+          <div className="flex items-start justify-between gap-3 mb-5">
+            <div className="flex min-w-0 items-center gap-4">
               <div
                 className="w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0"
                 style={{ backgroundColor: av.bg, color: av.text }}
               >
                 {employee?.name.charAt(0).toUpperCase() || '?'}
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-slate-800">{employee?.name}</h3>
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="truncate text-base font-bold text-slate-800">{employee?.name}</h3>
+                  <span className={`inline-flex flex-shrink-0 items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${
                     employee?.isActive ? 'text-emerald-600 bg-emerald-50 border border-emerald-100' : 'text-red-500 bg-red-50 border border-red-100'
                   }`}>
                     {employee?.isActive ? <CheckCircle2 size={9} /> : <AlertCircle size={9} />}
@@ -200,10 +237,11 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
             </div>
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-ghost rounded-lg"
+              className="flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-ghost rounded-lg"
+              aria-label="Close employee details"
             >
-              <ChevronUp size={13} />
-              Collapse
+              <X size={14} />
+              Close
             </button>
           </div>
 
@@ -450,7 +488,9 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
           </AnimatePresence>
         </>
       )}
-    </div>
+        </div>
+      </motion.aside>
+    </motion.div>
   );
 }
 
