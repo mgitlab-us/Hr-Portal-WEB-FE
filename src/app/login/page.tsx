@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -10,6 +10,8 @@ import Link from 'next/link';
 export default function LoginPage() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
+  const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,6 +19,18 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Middleware no longer bounces /login -> /dashboard on the coarse cookie.
+  // Redirect only when the persisted store actually holds a session.
+  useEffect(() => {
+    if (user && accessToken) {
+      // The middleware gate uses this cookie. If it expired while the persisted
+      // session survived, re-sync it before navigating or /dashboard would
+      // bounce back to /login forever.
+      document.cookie = "isAuthenticated=true; path=/; max-age=604800; samesite=lax";
+      router.replace('/dashboard');
+    }
+  }, [user, accessToken, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

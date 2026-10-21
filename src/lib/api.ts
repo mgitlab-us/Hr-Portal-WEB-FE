@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
 
@@ -81,12 +82,18 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (err) {
         isRefreshing = false;
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        // A failed refresh must settle every queued request. Leaving them
-        // pending means the UI waits forever on requests that can never retry.
+
+        // A failed refresh means the session is dead. Clear the Zustand store,
+        // its persisted snapshot, and the middleware cookie before redirecting.
+        // Clearing only the token keys leaves the cookie + cached user behind,
+        // so /login bounces straight back to /dashboard and the app reload-loops.
         onRefreshFailed(err);
-        if (typeof window !== 'undefined') window.location.href = '/login';
+        if (typeof window !== 'undefined') {
+          useAuthStore.getState().logout();
+          if (!window.location.pathname.startsWith('/login')) {
+            window.location.replace('/login');
+          }
+        }
         return Promise.reject(err);
       }
     }

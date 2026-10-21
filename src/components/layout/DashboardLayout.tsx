@@ -272,6 +272,15 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
   const [orgLogo, setOrgLogo] = React.useState<string | null>(null);
   const [orgName, setOrgName] = React.useState<string>('TapIn');
 
+  // Wait for Zustand persist hydration before deciding whether a session
+  // exists. Checking the raw `auth-storage` key is unreliable: logout writes a
+  // null state there, which used to keep the layout stuck on the spinner.
+  const authHydrated = React.useSyncExternalStore(
+    (onStoreChange) => useAuthStore.persist.onFinishHydration(onStoreChange),
+    () => useAuthStore.persist.hasHydrated(),
+    () => false
+  );
+
   const activeNav = getNavItems(user?.role).find((item) => isActivePath(pathname, item.href));
   const sectionLabel = activeNav?.label ?? 'Overview';
 
@@ -283,12 +292,12 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
     });
   };
 
-  // Redirect if not logged in
+  // Redirect if not logged in once hydration is settled.
   React.useEffect(() => {
-    if (!user && !localStorage.getItem('auth-storage')) {
+    if (authHydrated && !user) {
       router.replace('/login');
     }
-  }, [user, router]);
+  }, [authHydrated, user, router]);
 
   // Fetch the organisation's branding (logo + name) once a user is present.
   React.useEffect(() => {
