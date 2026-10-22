@@ -17,6 +17,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   BarChart3,
+  Megaphone,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
@@ -47,6 +48,7 @@ const baseNavItems: NavEntry[] = [
   { href: '/dashboard/shifts', icon: History, label: 'Shifts' },
   { href: '/dashboard/attendance', icon: Clock, label: 'Attendance' },
   { href: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
+  { href: '/dashboard/notice-board', icon: Megaphone, label: 'Notice Board' },
   { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
   { href: '/dashboard/leaves', icon: Plane, label: 'Leaves' },
   { href: '/dashboard/holidays', icon: Calendar, label: 'Holidays' },
