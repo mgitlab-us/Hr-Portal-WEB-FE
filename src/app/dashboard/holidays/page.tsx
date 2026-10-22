@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Calendar, Plus, X, Loader2, Trash2, Info } from 'lucide-react';
+import Link from 'next/link';
+import { Calendar, Plus, X, Loader2, Trash2, Info, Building2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { clsx, type ClassValue } from 'clsx';
@@ -105,13 +106,22 @@ export default function HolidaysPage() {
             <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Holidays & Weekends</h1>
             <p className="text-sm text-slate-400 mt-0.5">Define non-working days for your team</p>
           </div>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
-          >
-            <Plus size={14} />
-            Add Holiday
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/dashboard/settings/departments"
+              className="inline-flex items-center gap-2 px-4 py-2.5 btn-secondary text-sm font-medium rounded-lg"
+            >
+              <Building2 size={14} />
+              Department Setup
+            </Link>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
+            >
+              <Plus size={14} />
+              Add Holiday
+            </button>
+          </div>
         </div>
 
         {/* ── Weekends Section */}
