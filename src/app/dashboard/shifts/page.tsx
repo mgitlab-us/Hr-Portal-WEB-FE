@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { History, Plus, X, Clock, Loader2, Trash2, ChevronDown, Pencil } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/components/ui/toast';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -23,11 +25,14 @@ interface ShiftProfile {
 }
 
 export default function ShiftsPage() {
+  const { toast } = useToast();
   const [shifts, setShifts] = useState<ShiftProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingShift, setEditingShift] = useState<ShiftProfile | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ShiftProfile | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [newShift, setNewShift] = useState({
     name: '',
     workHours: 8,
@@ -89,21 +94,29 @@ export default function ShiftsPage() {
         expectedCheckinMinute: 0,
         isDefault: false,
       });
+      toast.success(`Shift ${editingShift ? 'updated' : 'created'}.`);
     } catch {
-      alert(`Failed to ${editingShift ? 'update' : 'create'} shift.`);
+      toast.error(`Failed to ${editingShift ? 'update' : 'create'} shift.`);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure? Shifts assigned to employees cannot be deleted.')) return;
+  const handleDelete = (shift: ShiftProfile) => setDeleteTarget(shift);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.delete(`/shifts/${id}`);
+      await api.delete(`/shifts/${deleteTarget.id}`);
       fetchShifts();
+      toast.success('Shift deleted.');
+      setDeleteTarget(null);
     } catch (err) {
       const apiErr = err as { response?: { data?: { message?: string } } };
-      alert(apiErr.response?.data?.message || 'Failed to delete shift.');
+      toast.error(apiErr.response?.data?.message || 'Failed to delete shift.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -209,7 +222,7 @@ export default function ShiftsPage() {
                       <Pencil size={13} />
                     </button>
                     <button
-                      onClick={() => handleDelete(shift.id)}
+                      onClick={() => handleDelete(shift)}
                       className="p-1.5 btn-danger-ghost rounded-md"
                       title="Delete shift"
                     >
@@ -437,6 +450,22 @@ export default function ShiftsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+        title="Delete this shift?"
+        description={
+          deleteTarget
+            ? `“${deleteTarget.name}” will be removed. Shifts assigned to employees cannot be deleted.`
+            : 'This shift will be removed. Shifts assigned to employees cannot be deleted.'
+        }
+        confirmLabel="Delete shift"
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </DashboardLayout>
   );
 }

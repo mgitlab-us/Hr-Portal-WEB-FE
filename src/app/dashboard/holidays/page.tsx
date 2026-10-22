@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Calendar, Plus, X, Loader2, Trash2, Info, Building2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/components/ui/toast';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -21,11 +23,14 @@ interface Holiday {
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function HolidaysPage() {
+  const { toast } = useToast();
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [weekends, setWeekends] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Holiday | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [newHoliday, setNewHoliday] = useState({ name: '', date: '' });
 
   const fetchData = async () => {
@@ -60,7 +65,7 @@ export default function HolidaysPage() {
     try {
       await api.put('/holidays/weekends', { weekends: updated });
     } catch {
-      alert('Failed to update weekends');
+      toast.error('Failed to update the weekend settings.');
       fetchData(); // Rollback
     }
   };
@@ -75,21 +80,29 @@ export default function HolidaysPage() {
       setIsAddModalOpen(false);
       setNewHoliday({ name: '', date: '' });
       fetchData();
+      toast.success('Holiday added.');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      alert(e?.response?.data?.message || 'Failed to add holiday');
+      toast.error(e?.response?.data?.message || 'Failed to add holiday');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeleteHoliday = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this holiday?')) return;
+  const handleDeleteHoliday = (holiday: Holiday) => setDeleteTarget(holiday);
+
+  const confirmDeleteHoliday = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.delete(`/holidays/${id}`);
+      await api.delete(`/holidays/${deleteTarget.id}`);
       fetchData();
+      toast.success('Holiday deleted.');
+      setDeleteTarget(null);
     } catch {
-      alert('Failed to delete holiday');
+      toast.error('Failed to delete holiday');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -206,7 +219,7 @@ export default function HolidaysPage() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <button
-                            onClick={() => handleDeleteHoliday(h.id)}
+                            onClick={() => handleDeleteHoliday(h)}
                             className="p-2 btn-danger-ghost rounded-lg"
                           >
                             <Trash2 size={14} />
@@ -280,6 +293,22 @@ export default function HolidaysPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+        title="Remove this holiday?"
+        description={
+          deleteTarget
+            ? `“${deleteTarget.name}” will be removed from the holiday calendar.`
+            : 'This holiday will be removed from the holiday calendar.'
+        }
+        confirmLabel="Remove holiday"
+        loading={deleting}
+        onConfirm={confirmDeleteHoliday}
+      />
     </DashboardLayout>
   );
 }

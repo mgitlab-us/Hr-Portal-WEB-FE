@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { DepartmentOrgChart } from '@/components/departments/DepartmentOrgChart';
+import { useToast } from '@/components/ui/toast';
 import { useRouter } from 'next/navigation';
 
 interface Department {
@@ -28,6 +29,7 @@ interface AdminOption {
 
 export default function DepartmentsPage() {
   const { user } = useAuthStore();
+  const { toast } = useToast();
   const router = useRouter();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [admins, setAdmins] = useState<AdminOption[]>([]);
@@ -99,9 +101,10 @@ export default function DepartmentsPage() {
       }
       setModal(null);
       fetchData();
+      toast.success(modal?.mode === 'create' ? 'Department created.' : 'Department updated.');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      alert(e?.response?.data?.message || 'Operation failed');
+      toast.error(e?.response?.data?.message || 'Operation failed');
     } finally {
       setSubmitting(false);
     }
@@ -114,9 +117,10 @@ export default function DepartmentsPage() {
       await api.delete(`/departments/${deleteTarget.id}`);
       setDeleteTarget(null);
       fetchData();
+      toast.success('Department deleted.');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      alert(e?.response?.data?.message || 'Failed to delete department');
+      toast.error(e?.response?.data?.message || 'Failed to delete department');
     } finally {
       setSubmitting(false);
     }

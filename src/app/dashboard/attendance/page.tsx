@@ -5,6 +5,7 @@ import { Clock, Calendar, Search, Download, Loader2, CheckCircle2, Timer, UserMi
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import FilterChips from '@/components/filters/FilterChips';
+import { useToast } from '@/components/ui/toast';
 
 // ── Same two-tone system as the overview dashboard — teal for on-track, coral for attention-needed.
 const TONES = {
@@ -133,6 +134,7 @@ function LocationPin({
 }
 
 export default function AttendanceLogsPage() {
+  const { toast } = useToast();
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -184,7 +186,7 @@ export default function AttendanceLogsPage() {
       link.click();
       link.remove();
     } catch {
-      alert('Failed to generate report. Only Admins can export data.');
+      toast.error('Failed to generate the report. Only admins can export data.');
     } finally {
       setExporting(null);
     }
@@ -472,7 +474,7 @@ export default function AttendanceLogsPage() {
                                   link.remove();
                                 } catch (err) {
                                   console.error('PDF download failed:', err);
-                                  alert('Failed to download report.');
+                                  toast.error('Failed to download the report.');
                                 }
                               }}
                               className="p-1.5 rounded-lg btn-ghost"

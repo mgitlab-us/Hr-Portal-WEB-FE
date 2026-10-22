@@ -4,6 +4,16 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Megaphone, Plus, RefreshCw } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import FilterChips from '@/components/filters/FilterChips';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
@@ -21,6 +31,7 @@ const TYPE_FILTERS = [
 
 export default function NoticeBoardPage() {
   const { user } = useAuthStore();
+  const { toast } = useToast();
   const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
 
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -28,6 +39,8 @@ export default function NoticeBoardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [deleteTarget, setDeleteTarget] = useState<Notice | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [formState, setFormState] = useState<{ open: boolean; notice: Notice | null }>({
     open: false,
     notice: null,
@@ -50,12 +63,13 @@ export default function NoticeBoardPage() {
         setNotices(Array.isArray(payload) ? payload : payload.data ?? []);
       } catch (error) {
         console.error('[NoticeBoard] Failed to load notices:', error);
+        toast.error('Unable to load the notice board. Please try again.');
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [typeFilter]
+    [toast, typeFilter]
   );
 
   const loadDepartments = useCallback(async () => {
@@ -66,8 +80,9 @@ export default function NoticeBoardPage() {
       setDepartments(response.data);
     } catch (error) {
       console.error('[NoticeBoard] Failed to load departments:', error);
+      toast.error('Unable to load departments for notice targeting.');
     }
-  }, [canManage]);
+  }, [canManage, toast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -84,15 +99,22 @@ export default function NoticeBoardPage() {
     [departments]
   );
 
-  const handleDelete = async (notice: Notice) => {
-    if (!window.confirm(`Delete “${notice.title}”? This cannot be undone.`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
 
+    setDeleting(true);
     try {
-      await api.delete(`/notices/${notice.id}`);
-      setNotices((current) => current.filter((item) => item.id !== notice.id));
+      await api.delete(`/notices/${deleteTarget.id}`);
+      setNotices((current) => current.filter((item) => item.id !== deleteTarget.id));
+      toast.success(`“${deleteTarget.title}” was deleted.`, 'Notice removed');
+      setDeleteTarget(null);
     } catch (error) {
       const requestError = error as { response?: { data?: { message?: string } } };
-      window.alert(requestError?.response?.data?.message || 'Unable to delete the notice.');
+      toast.error(
+        requestError?.response?.data?.message || 'Unable to delete the notice.'
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -202,12 +224,48 @@ export default function NoticeBoardPage() {
                     ? () => setFormState({ open: true, notice })
                     : undefined
                 }
-                onDelete={canManage ? () => handleDelete(notice) : undefined}
+                onDelete={canManage ? () => setDeleteTarget(notice) : undefined}
               />
             ))}
           </div>
         )}
       </div>
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this notice?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `“${deleteTarget.title}” will be removed from the notice board. This cannot be undone.`
+                : 'This notice will be removed from the notice board.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-rose-500 text-white hover:bg-rose-600"
+            >
+              {deleting ? 'Deleting…' : 'Delete notice'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <NoticeForm
         key={`${formState.open ? 'open' : 'closed'}-${formState.notice?.id ?? 'new'}`}

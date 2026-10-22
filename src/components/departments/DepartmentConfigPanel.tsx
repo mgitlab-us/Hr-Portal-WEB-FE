@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/components/ui/toast';
 import {
   Select,
   SelectContent,
@@ -155,6 +157,7 @@ export default function DepartmentConfigPanel({
   embedded = false,
 }: DepartmentConfigPanelProps) {
   const { user } = useAuthStore();
+  const { toast } = useToast();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [shifts, setShifts] = useState<ShiftProfile[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState(initialDepartmentId ?? '');
@@ -168,6 +171,13 @@ export default function DepartmentConfigPanel({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    description: string;
+    confirmLabel?: string;
+    action: () => Promise<void>;
+  } | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const [configForm, setConfigForm] = useState({
     shiftProfileId: '',
@@ -321,7 +331,7 @@ export default function DepartmentConfigPanel({
       });
       setSavedMessage('Department work settings saved.');
     } catch (error) {
-      alert(apiMessage(error, 'Failed to save department work settings.'));
+      toast.error(apiMessage(error, 'Failed to save department work settings.'));
     } finally {
       setSavingConfig(false);
     }
@@ -339,7 +349,7 @@ export default function DepartmentConfigPanel({
       });
       setSavedMessage('Department leave policy saved.');
     } catch (error) {
-      alert(apiMessage(error, 'Failed to save the department leave policy.'));
+      toast.error(apiMessage(error, 'Failed to save the department leave policy.'));
     } finally {
       setSavingPolicy(false);
     }
@@ -361,26 +371,32 @@ export default function DepartmentConfigPanel({
       setNewHoliday({ name: '', date: '' });
       setSavedMessage('Department holiday added.');
     } catch (error) {
-      alert(apiMessage(error, 'Failed to add the department holiday.'));
+      toast.error(apiMessage(error, 'Failed to add the department holiday.'));
     } finally {
       setAddingHoliday(false);
     }
   };
 
-  const removeHoliday = async (holiday: DepartmentHoliday) => {
+  const removeHoliday = (holiday: DepartmentHoliday) => {
     if (!activeDeptId) return;
-    if (!confirm(`Remove "${holiday.name}" from this department?`)) return;
-    setDeletingHolidayId(holiday.id);
-    setSavedMessage(null);
-    try {
-      await api.delete(`/departments/${activeDeptId}/holidays/${holiday.id}`);
-      setHolidays((current) => current.filter((item) => item.id !== holiday.id));
-      setSavedMessage('Department holiday removed.');
-    } catch (error) {
-      alert(apiMessage(error, 'Failed to remove the department holiday.'));
-    } finally {
-      setDeletingHolidayId(null);
-    }
+    setPendingConfirm({
+      title: 'Remove department holiday?',
+      description: `“${holiday.name}” will no longer be a non-working day for this department.`,
+      confirmLabel: 'Remove holiday',
+      action: async () => {
+        setDeletingHolidayId(holiday.id);
+        setSavedMessage(null);
+        try {
+          await api.delete(`/departments/${activeDeptId}/holidays/${holiday.id}`);
+          setHolidays((current) => current.filter((item) => item.id !== holiday.id));
+          setSavedMessage('Department holiday removed.');
+        } catch (error) {
+          toast.error(apiMessage(error, 'Failed to remove the department holiday.'));
+        } finally {
+          setDeletingHolidayId(null);
+        }
+      },
+    });
   };
 
   const addDesignation = async (event: React.FormEvent) => {
@@ -399,7 +415,7 @@ export default function DepartmentConfigPanel({
       setNewDesignationName('');
       setSavedMessage('Designation added.');
     } catch (error) {
-      alert(apiMessage(error, 'Failed to add the designation.'));
+      toast.error(apiMessage(error, 'Failed to add the designation.'));
     } finally {
       setAddingDesignation(false);
     }
@@ -431,29 +447,46 @@ export default function DepartmentConfigPanel({
       cancelEditingDesignation();
       setSavedMessage('Designation updated.');
     } catch (error) {
-      alert(apiMessage(error, 'Failed to update the designation.'));
+      toast.error(apiMessage(error, 'Failed to update the designation.'));
     } finally {
       setUpdatingDesignationId(null);
     }
   };
 
-  const removeDesignation = async (designation: Designation) => {
-    if (!confirm(`Delete the "${designation.name}" designation?`)) return;
-    setDeletingDesignationId(designation.id);
-    setSavedMessage(null);
+  const removeDesignation = (designation: Designation) => {
+    setPendingConfirm({
+      title: 'Delete designation?',
+      description: `“${designation.name}” will be removed from this department. This cannot be undone.`,
+      confirmLabel: 'Delete designation',
+      action: async () => {
+        setDeletingDesignationId(designation.id);
+        setSavedMessage(null);
+        try {
+          await api.delete(`/designations/${designation.id}`);
+          setDesignations((current) => current.filter((item) => item.id !== designation.id));
+          setSavedMessage('Designation deleted.');
+        } catch (error) {
+          toast.error(
+            apiMessage(
+              error,
+              'This designation cannot be deleted while employees are assigned to it.'
+            )
+          );
+        } finally {
+          setDeletingDesignationId(null);
+        }
+      },
+    });
+  };
+
+  const runConfirmedAction = async () => {
+    if (!pendingConfirm) return;
+    setConfirming(true);
     try {
-      await api.delete(`/designations/${designation.id}`);
-      setDesignations((current) => current.filter((item) => item.id !== designation.id));
-      setSavedMessage('Designation deleted.');
-    } catch (error) {
-      alert(
-        apiMessage(
-          error,
-          'This designation cannot be deleted while employees are assigned to it.'
-        )
-      );
+      await pendingConfirm.action();
     } finally {
-      setDeletingDesignationId(null);
+      setConfirming(false);
+      setPendingConfirm(null);
     }
   };
 
@@ -944,6 +977,18 @@ export default function DepartmentConfigPanel({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingConfirm)}
+        onOpenChange={(open) => {
+          if (!open && !confirming) setPendingConfirm(null);
+        }}
+        title={pendingConfirm?.title ?? ''}
+        description={pendingConfirm?.description ?? ''}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        loading={confirming}
+        onConfirm={runConfirmedAction}
+      />
     </div>
   );
 }

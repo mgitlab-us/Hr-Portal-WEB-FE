@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { useToast } from '@/components/ui/toast';
 
 interface CorrectionRequest {
   id: string;
@@ -186,6 +187,7 @@ function CorrectionCard({
 }
 
 export default function CorrectionsPage() {
+  const { toast } = useToast();
   const [requests, setRequests] = useState<CorrectionRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -211,8 +213,9 @@ export default function CorrectionsPage() {
     try {
       await api.put(`/corrections/${id}/review`, { status });
       setRequests((prev) => prev.filter((r) => r.id !== id));
+      toast.success(`Correction request ${status === 'APPROVED' ? 'approved' : 'rejected'}.`);
     } catch {
-      alert('Action failed. Ensure you have Super Admin privileges.');
+      toast.error('Action failed. Ensure you have Super Admin privileges.');
     } finally {
       setProcessingId(null);
     }
