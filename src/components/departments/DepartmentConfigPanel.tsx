@@ -152,6 +152,19 @@ interface DepartmentConfigPanelProps {
   embedded?: boolean;
 }
 
+type DepartmentSection = 'work' | 'leave' | 'holidays' | 'designations';
+
+const SECTION_TABS: {
+  id: DepartmentSection;
+  label: string;
+  icon: React.ElementType;
+}[] = [
+  { id: 'work', label: 'Work settings', icon: Clock },
+  { id: 'leave', label: 'Leave policy', icon: Plane },
+  { id: 'holidays', label: 'Department holidays', icon: Calendar },
+  { id: 'designations', label: 'Designations', icon: Briefcase },
+];
+
 export default function DepartmentConfigPanel({
   initialDepartmentId,
   embedded = false,
@@ -161,6 +174,7 @@ export default function DepartmentConfigPanel({
   const [departments, setDepartments] = useState<Department[]>([]);
   const [shifts, setShifts] = useState<ShiftProfile[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState(initialDepartmentId ?? '');
+  const [activeSection, setActiveSection] = useState<DepartmentSection>('work');
   const [referenceLoading, setReferenceLoading] = useState(true);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [referenceReload, setReferenceReload] = useState(0);
@@ -539,46 +553,68 @@ export default function DepartmentConfigPanel({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div
-        className={
-          embedded
-            ? 'flex justify-end'
-            : 'flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'
-        }
-      >
-        {!embedded && (
-          <div>
-            <div className="mb-1 flex items-center gap-2">
-              <Building2 size={13} className="text-slate-400" />
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                Company Setup · Departments
-              </p>
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
-              Department Configuration
-            </h1>
-            <p className="mt-0.5 text-sm text-slate-400">
-              Set work rules, holidays, leave quotas, and designations for each department.
+    <div className={embedded ? 'space-y-5' : 'mx-auto max-w-5xl space-y-6'}>
+      {!embedded && (
+        <div>
+          <div className="mb-1 flex items-center gap-2">
+            <Building2 size={13} className="text-slate-400" />
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+              Company Setup · Departments
             </p>
           </div>
-        )}
-        <div className="w-full space-y-1.5 sm:w-72">
-          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Department
-          </label>
-          <Select value={activeDeptId} onValueChange={setSelectedDeptId}>
-            <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white text-sm text-slate-700">
-              <SelectValue placeholder="Select a department" />
-            </SelectTrigger>
-            <SelectContent>
-              {manageableDepartments.map((department) => (
-                <SelectItem key={department.id} value={department.id}>
-                  {department.name} ({department._count.employees})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
+            Department configuration
+          </h1>
+          <p className="mt-0.5 text-sm text-slate-400">
+            Manage work rules, leave policy, holidays, and designations for one department at a time.
+          </p>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <Building2 size={18} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                Department scope
+              </p>
+              <p className="truncate text-sm font-semibold text-slate-800">
+                {activeDepartment?.name ?? 'Select a department'}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                {activeDepartment
+                  ? `${activeDepartment._count.employees} ${
+                      activeDepartment._count.employees === 1 ? 'employee' : 'employees'
+                    } · overrides apply only to this team`
+                  : 'Choose a department to configure'}
+              </p>
+            </div>
+          </div>
+
+          {manageableDepartments.length > 1 ? (
+            <div className="w-full sm:w-64">
+              <Select value={activeDeptId} onValueChange={setSelectedDeptId}>
+                <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white text-sm text-slate-700">
+                  <SelectValue placeholder="Choose department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {manageableDepartments.map((department) => (
+                    <SelectItem key={department.id} value={department.id}>
+                      {department.name} ({department._count.employees})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-500 sm:self-auto">
+              <Users size={12} />
+              Only department you manage
+            </span>
+          )}
         </div>
       </div>
 
@@ -624,41 +660,88 @@ export default function DepartmentConfigPanel({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+        <div className="space-y-4">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+            <div className="flex min-w-max gap-1">
+              {SECTION_TABS.map((section) => {
+                const Icon = section.icon;
+                const active = activeSection === section.id;
+                const count =
+                  section.id === 'holidays'
+                    ? holidays.length
+                    : section.id === 'designations'
+                      ? designations.length
+                      : null;
+
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveSection(section.id)}
+                    className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                      active
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    {section.label}
+                    {count !== null ? (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                          active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="space-y-6">
+            {activeSection === 'work' && (
             <SectionCard>
               <SectionHeader
                 icon={Clock}
                 title="Work settings"
-                subtitle="Shift, weekend, and grace-period overrides for this department."
+                subtitle="Department overrides. Unset values inherit the company defaults."
               />
               <div className="space-y-5 p-5">
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                     Shift profile
                   </label>
-                  <Select
-                    value={configForm.shiftProfileId || 'DEFAULT'}
-                    onValueChange={(value) =>
-                      setConfigForm((current) => ({
-                        ...current,
-                        shiftProfileId: value === 'DEFAULT' ? '' : value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-700">
-                      <SelectValue placeholder="Use company default" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DEFAULT">Use company default</SelectItem>
-                      {shifts.map((shift) => (
-                        <SelectItem key={shift.id} value={shift.id}>
-                          {shift.name}
-                          {shift.isDefault ? ' · default' : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {shifts.length === 0 ? (
+                    <div className="flex h-10 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500">
+                      Use company default
+                    </div>
+                  ) : (
+                    <Select
+                      value={configForm.shiftProfileId || 'DEFAULT'}
+                      onValueChange={(value) =>
+                        setConfigForm((current) => ({
+                          ...current,
+                          shiftProfileId: value === 'DEFAULT' ? '' : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-700">
+                        <SelectValue placeholder="Use company default" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DEFAULT">Use company default</SelectItem>
+                        {shifts.map((shift) => (
+                          <SelectItem key={shift.id} value={shift.id}>
+                            {shift.name}
+                            {shift.isDefault ? ' · default' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -733,7 +816,9 @@ export default function DepartmentConfigPanel({
                 </div>
               </div>
             </SectionCard>
+            )}
 
+            {activeSection === 'leave' && (
             <SectionCard>
               <SectionHeader
                 icon={Plane}
@@ -785,9 +870,9 @@ export default function DepartmentConfigPanel({
                 </div>
               </div>
             </SectionCard>
-          </div>
+            )}
 
-          <div className="space-y-6">
+            {activeSection === 'holidays' && (
             <SectionCard>
               <SectionHeader
                 icon={Calendar}
@@ -863,7 +948,9 @@ export default function DepartmentConfigPanel({
                 )}
               </div>
             </SectionCard>
+            )}
 
+            {activeSection === 'designations' && (
             <SectionCard>
               <SectionHeader
                 icon={Briefcase}
@@ -974,6 +1061,7 @@ export default function DepartmentConfigPanel({
                 </p>
               </div>
             </SectionCard>
+            )}
           </div>
         </div>
       )}
