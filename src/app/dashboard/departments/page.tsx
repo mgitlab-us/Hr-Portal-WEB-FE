@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Building2, Plus, X, Loader2, Trash2, Pencil, Users, UserCog, ChevronDown,
-  LayoutGrid, TableProperties,
+  LayoutGrid, TableProperties, Settings2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -163,6 +163,13 @@ export default function DepartmentsPage() {
                 Table
               </button>
             </div>
+            <button
+              onClick={() => router.push('/dashboard/settings/departments')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 btn-secondary text-sm font-medium rounded-lg"
+            >
+              <Settings2 size={14} />
+              Department Setup
+            </button>
             <button
               onClick={openCreate}
               className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
