@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, MessageSquare, Loader2, Check, X, Plane, Briefcase } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import FilterChips from '@/components/filters/FilterChips';
 
 interface LeaveRequest {
   id: string;
@@ -41,8 +42,19 @@ function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
+type LeaveTypeFilter = 'ALL' | 'SICK' | 'CASUAL' | 'VACATION' | 'OTHER';
+
+function normalizeLeaveType(type: string): Exclude<LeaveTypeFilter, 'ALL'> {
+  const value = type.toUpperCase();
+  if (value.includes('SICK')) return 'SICK';
+  if (value.includes('CASUAL')) return 'CASUAL';
+  if (value.includes('VACATION') || value.includes('ANNUAL')) return 'VACATION';
+  return 'OTHER';
+}
+
 export default function LeavesPage() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [typeFilter, setTypeFilter] = useState<LeaveTypeFilter>('ALL');
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
@@ -76,6 +88,27 @@ export default function LeavesPage() {
 
   const pending = requests.filter((r) => r.status === 'PENDING');
 
+  const typeCounts = requests.reduce(
+    (acc, request) => {
+      acc[normalizeLeaveType(request.type)] += 1;
+      return acc;
+    },
+    { SICK: 0, CASUAL: 0, VACATION: 0, OTHER: 0 }
+  );
+
+  const typeOptions = [
+    { label: 'All types', value: 'ALL', count: requests.length },
+    { label: 'Sick', value: 'SICK', count: typeCounts.SICK },
+    { label: 'Casual', value: 'CASUAL', count: typeCounts.CASUAL },
+    { label: 'Vacation', value: 'VACATION', count: typeCounts.VACATION },
+    { label: 'Other', value: 'OTHER', count: typeCounts.OTHER },
+  ];
+
+  const visibleRequests =
+    typeFilter === 'ALL'
+      ? requests
+      : requests.filter((request) => normalizeLeaveType(request.type) === typeFilter);
+
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-slate-50 p-6 lg:p-8 space-y-6">
@@ -103,6 +136,16 @@ export default function LeavesPage() {
           )}
         </div>
 
+        {!loading && requests.length > 0 && (
+          <div className="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+            <FilterChips
+              options={typeOptions}
+              value={typeFilter}
+              onChange={(value) => setTypeFilter(value as LeaveTypeFilter)}
+            />
+          </div>
+        )}
+
         {/* Body */}
         {loading ? (
           <div className="h-64 flex items-center justify-center">
@@ -121,9 +164,29 @@ export default function LeavesPage() {
               No pending leave requests at the moment.
             </p>
           </div>
+        ) : visibleRequests.length === 0 ? (
+          <div className="bg-white border border-slate-100 rounded-xl p-16 flex flex-col items-center text-center gap-3">
+            <div
+              className="w-10 h-10 rounded-lg flex items-center justify-center mb-1"
+              style={{ backgroundColor: '#EFF6FF' }}
+            >
+              <Plane size={18} className="text-blue-500" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700">No matching requests</p>
+            <p className="text-xs text-slate-400 max-w-xs">
+              There are no pending {typeFilter.toLowerCase()} leave requests right now.
+            </p>
+            <button
+              type="button"
+              onClick={() => setTypeFilter('ALL')}
+              className="text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
+            >
+              Show all leave types
+            </button>
+          </div>
         ) : (
           <div className="space-y-4">
-            {requests.map((req) => {
+            {visibleRequests.map((req) => {
               const color = avatarColor(req.employee.name);
               const isProcessing = processingId === req.id;
 

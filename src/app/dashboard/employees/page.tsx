@@ -7,6 +7,14 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import EmployeeDetailsDrawer from '@/components/employees/EmployeeDetailsDrawer';
+import FilterChips from '@/components/filters/FilterChips';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Employee {
   id: string;
@@ -109,6 +117,8 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'EMPLOYEE' | 'ADMIN'>('ALL');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -177,21 +187,52 @@ export default function EmployeesPage() {
     init();
   }, [user]);
 
-  const filteredEmployees = useMemo(() => {
-    return employees.filter(
-      (emp) => {
-        const matchesSearch =
-          emp.name.toLowerCase().includes(search.toLowerCase()) ||
-          emp.email.toLowerCase().includes(search.toLowerCase()) ||
-          emp.profile?.employeeCode?.toLowerCase().includes(search.toLowerCase());
-        const matchesDept =
-          !departmentFilter ||
-          emp.departmentId === departmentFilter ||
-          emp.department?.id === departmentFilter;
-        return matchesSearch && matchesDept;
-      }
-    );
+  const scopedEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      const matchesSearch =
+        emp.name.toLowerCase().includes(search.toLowerCase()) ||
+        emp.email.toLowerCase().includes(search.toLowerCase()) ||
+        emp.profile?.employeeCode?.toLowerCase().includes(search.toLowerCase());
+      const matchesDept =
+        !departmentFilter ||
+        emp.departmentId === departmentFilter ||
+        emp.department?.id === departmentFilter;
+      return matchesSearch && matchesDept;
+    });
   }, [employees, search, departmentFilter]);
+
+  const statusOptions = useMemo(() => {
+    const active = scopedEmployees.filter((emp) => emp.isActive).length;
+    return [
+      { label: 'All statuses', value: 'ALL', count: scopedEmployees.length },
+      { label: 'Active', value: 'ACTIVE', count: active },
+      { label: 'Inactive', value: 'INACTIVE', count: scopedEmployees.length - active },
+    ];
+  }, [scopedEmployees]);
+
+  const roleOptions = useMemo(() => {
+    const staff = scopedEmployees.filter((emp) => emp.role === 'EMPLOYEE').length;
+    return [
+      { label: 'All roles', value: 'ALL', count: scopedEmployees.length },
+      { label: 'Employees', value: 'EMPLOYEE', count: staff },
+      { label: 'Admins', value: 'ADMIN', count: scopedEmployees.length - staff },
+    ];
+  }, [scopedEmployees]);
+
+  const filteredEmployees = useMemo(() => {
+    return scopedEmployees.filter((emp) => {
+      const matchesStatus =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'ACTIVE' ? emp.isActive : !emp.isActive);
+      const matchesRole =
+        roleFilter === 'ALL' ||
+        (roleFilter === 'EMPLOYEE' ? emp.role === 'EMPLOYEE' : emp.role !== 'EMPLOYEE');
+      return matchesStatus && matchesRole;
+    });
+  }, [scopedEmployees, statusFilter, roleFilter]);
+
+  const hasActiveFilters =
+    !!search || !!departmentFilter || statusFilter !== 'ALL' || roleFilter !== 'ALL';
 
   const expandedEmployee =
     employees.find((emp) => emp.id === expandedEmployeeId) ?? null;
@@ -281,43 +322,73 @@ export default function EmployeesPage() {
         <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
 
           {/* Toolbar */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
-            <div className="relative flex-1 max-w-sm">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search name, email or ID…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost rounded-md"
+          <div className="border-b border-slate-100">
+            <div className="flex items-center gap-3 px-5 py-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search name, email or ID…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost rounded-md"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              {departments.length > 0 && (
+                <Select
+                  value={departmentFilter || 'ALL'}
+                  onValueChange={(value) => setDepartmentFilter(value === 'ALL' ? '' : value)}
                 >
-                  <X size={12} />
+                  <SelectTrigger className="h-9 w-[180px] rounded-lg border-slate-200 bg-slate-50 text-sm text-slate-700">
+                    <SelectValue placeholder="All departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All departments</SelectItem>
+                    {departments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
+                <Users size={12} />
+                <span>{filteredEmployees.length} result{filteredEmployees.length !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-50 bg-slate-50/40 px-5 py-3">
+              <FilterChips
+                options={statusOptions}
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+              />
+              <div className="hidden h-4 w-px bg-slate-200 sm:block" />
+              <FilterChips
+                options={roleOptions}
+                value={roleFilter}
+                onChange={(value) => setRoleFilter(value as typeof roleFilter)}
+              />
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setDepartmentFilter('');
+                    setStatusFilter('ALL');
+                    setRoleFilter('ALL');
+                  }}
+                  className="ml-auto text-xs font-semibold text-slate-400 transition-colors hover:text-blue-600"
+                >
+                  Clear filters
                 </button>
               )}
-            </div>
-            {departments.length > 0 && (
-              <div className="relative">
-                <select
-                  value={departmentFilter}
-                  onChange={(e) => setDepartmentFilter(e.target.value)}
-                  className="appearance-none bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                >
-                  <option value="">All departments</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-            )}
-            <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
-              <Users size={12} />
-              <span>{filteredEmployees.length} result{filteredEmployees.length !== 1 ? 's' : ''}</span>
             </div>
           </div>
 
@@ -330,6 +401,20 @@ export default function EmployeesPage() {
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Users size={28} className="mb-3 text-slate-300" />
               <p className="text-sm">No employees found</p>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setDepartmentFilter('');
+                    setStatusFilter('ALL');
+                    setRoleFilter('ALL');
+                  }}
+                  className="mt-2 text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">

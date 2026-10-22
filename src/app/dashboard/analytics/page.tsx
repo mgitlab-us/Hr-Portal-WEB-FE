@@ -15,6 +15,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import FilterChips from '@/components/filters/FilterChips';
 
 interface AttendanceLog {
   id: string;
@@ -143,6 +144,12 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle?: st
 
 const MAX_RANGE_DAYS = 92;
 
+const RANGE_PRESETS = [
+  { label: '7D', days: 7 },
+  { label: '30D', days: 30 },
+  { label: '90D', days: 90 },
+] as const;
+
 export default function AnalyticsPage() {
   const { user } = useAuthStore();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -157,6 +164,7 @@ export default function AnalyticsPage() {
     const from = toISODate(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000));
     return { from, to };
   });
+  const [rangePreset, setRangePreset] = useState('30D');
   const [today] = useState(() => toISODate(new Date()));
 
   const [logsByDate, setLogsByDate] = useState<Record<string, AttendanceLog[]>>({});
@@ -327,6 +335,16 @@ export default function AnalyticsPage() {
 
   const displayRange = `${formatShortDate(range.from)} – ${formatShortDate(range.to)}`;
 
+  const applyRangePreset = (value: string) => {
+    const preset = RANGE_PRESETS.find((item) => item.label === value);
+    if (!preset) return;
+    setRange({
+      from: toISODate(new Date(Date.now() - (preset.days - 1) * 24 * 60 * 60 * 1000)),
+      to: today,
+    });
+    setRangePreset(value);
+  };
+
   return (
     <DashboardLayout>
       <div className="p-6 lg:p-8">
@@ -350,7 +368,10 @@ export default function AnalyticsPage() {
                   type="date"
                   value={range.from}
                   max={range.to}
-                  onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
+                  onChange={(e) => {
+                    setRange((r) => ({ ...r, from: e.target.value }));
+                    setRangePreset('');
+                  }}
                   style={{ colorScheme: 'light' }}
                   className="bg-transparent text-slate-700 text-sm focus:outline-none border-0"
                 />
@@ -360,29 +381,22 @@ export default function AnalyticsPage() {
                   value={range.to}
                   min={range.from}
                   max={today}
-                  onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
+                  onChange={(e) => {
+                    setRange((r) => ({ ...r, to: e.target.value }));
+                    setRangePreset('');
+                  }}
                   style={{ colorScheme: 'light' }}
                   className="bg-transparent text-slate-700 text-sm focus:outline-none border-0"
                 />
               </div>
-              <div className="inline-flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
-                {[
-                  { label: '7D', days: 7 },
-                  { label: '30D', days: 30 },
-                  { label: '90D', days: 90 },
-                ].map((preset) => (
-                  <button
-                    key={preset.label}
-                    onClick={() => setRange({
-                      from: toISODate(new Date(Date.now() - (preset.days - 1) * 24 * 60 * 60 * 1000)),
-                      to: today,
-                    })}
-                    className="rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-700"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
+              <FilterChips
+                options={RANGE_PRESETS.map((preset) => ({
+                  label: preset.label,
+                  value: preset.label,
+                }))}
+                value={rangePreset}
+                onChange={applyRangePreset}
+              />
             </div>
           </div>
 

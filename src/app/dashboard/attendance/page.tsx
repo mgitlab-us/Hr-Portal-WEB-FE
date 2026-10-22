@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Clock, Calendar, Search, Download, Loader2, CheckCircle2, Timer, UserMinus, X, FileText, MapPin, ArrowRight, } from 'lucide-react';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import FilterChips from '@/components/filters/FilterChips';
 
 // ── Same two-tone system as the overview dashboard — teal for on-track, coral for attention-needed.
 const TONES = {
@@ -30,6 +31,8 @@ interface AttendanceLog {
   checkoutAccuracy?: number;
   color: string;
 }
+
+type StatusFilter = 'ALL' | 'PRESENT' | 'LATE' | 'ABSENT';
 
 // ── Identity color for the avatar — alternates teal/coral by name, purely for
 // telling rows apart at a glance. Status still lives in the badge, not here.
@@ -134,6 +137,7 @@ export default function AttendanceLogsPage() {
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
 
   // Fetch is defined inline inside the effect (rather than calling out to a
@@ -186,17 +190,36 @@ export default function AttendanceLogsPage() {
     }
   };
 
-  const filteredLogs = logs.filter(
-    (log) =>
+  const filteredLogs = logs.filter((log) => {
+    const matchesSearch =
       log.name.toLowerCase().includes(search.toLowerCase()) ||
-      log.id.toLowerCase().includes(search.toLowerCase())
-  );
+      log.id.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus =
+      statusFilter === 'ALL' ||
+      (statusFilter === 'PRESENT'
+        ? log.status === 'PRESENT' || log.status === 'ON-TIME'
+        : log.status === statusFilter);
+    return matchesSearch && matchesStatus;
+  });
 
   const present = logs.filter(
     (l) => l.status === 'PRESENT' || l.status === 'ON-TIME' || l.status === 'LATE'
   ).length;
+  const onTime = logs.filter(
+    (l) => l.status === 'PRESENT' || l.status === 'ON-TIME'
+  ).length;
   const late = logs.filter((l) => l.status === 'LATE').length;
   const absent = logs.filter((l) => l.status === 'ABSENT').length;
+
+  const statusOptions = [
+    { label: 'All', value: 'ALL', count: logs.length },
+    { label: 'On time', value: 'PRESENT', count: onTime },
+    { label: 'Late', value: 'LATE', count: late },
+    { label: 'Absent', value: 'ABSENT', count: absent },
+  ];
+
+  const activeStatusLabel =
+    statusOptions.find((option) => option.value === statusFilter)?.label ?? 'All';
 
   const displayDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
@@ -265,28 +288,40 @@ export default function AttendanceLogsPage() {
         <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
 
           {/* Toolbar */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
-            <div className="relative flex-1 max-w-sm">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search staff name or ID…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB]/15 focus:border-[#2563EB]/40 transition-all"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost rounded-md"
-                >
-                  <X size={12} />
-                </button>
-              )}
+          <div className="border-b border-slate-100">
+            <div className="flex items-center gap-3 px-5 py-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search staff name or ID…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB]/15 focus:border-[#2563EB]/40 transition-all"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost rounded-md"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <div className="ml-auto text-xs text-slate-400 flex items-center gap-1.5">
+                <Clock size={12} />
+                <span>{filteredLogs.length} record{filteredLogs.length !== 1 ? 's' : ''}</span>
+              </div>
             </div>
-            <div className="ml-auto text-xs text-slate-400 flex items-center gap-1.5">
-              <Clock size={12} />
-              <span>{filteredLogs.length} record{filteredLogs.length !== 1 ? 's' : ''}</span>
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-50 bg-slate-50/40 px-5 py-3">
+              <FilterChips
+                options={statusOptions}
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value as StatusFilter)}
+              />
+              <span className="ml-auto text-[11px] font-medium text-slate-400">
+                Filter by attendance status
+              </span>
             </div>
           </div>
 
@@ -333,7 +368,19 @@ export default function AttendanceLogsPage() {
                       <td colSpan={5} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-2 text-slate-300">
                           <Clock size={26} />
-                          <p className="text-sm text-slate-400">No logs for this date</p>
+                          <p className="text-sm text-slate-400">
+                            {statusFilter === 'ALL'
+                              ? 'No logs for this date'
+                              : `No ${activeStatusLabel.toLowerCase()} logs for this date`}
+                          </p>
+                          {statusFilter !== 'ALL' && (
+                            <button
+                              onClick={() => setStatusFilter('ALL')}
+                              className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                            >
+                              Show all statuses
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
