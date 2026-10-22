@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import HeaderActions, { type NotificationItem } from '@/components/layout/HeaderActions';
+import StatsDrilldownDialog, { type DrilldownMetric } from '@/components/dashboard/StatsDrilldownDialog';
 import { io } from 'socket.io-client';
 
 // ── Status tones — used by the live activity feed (badges + avatars).
@@ -48,6 +49,7 @@ function StatCard({
   style,
   sub,
   subColor,
+  onClick,
 }: {
   label: string;
   value: string | number;
@@ -55,33 +57,41 @@ function StatCard({
   style: StatStyle;
   sub: string;
   subColor?: string;
+  onClick?: () => void;
 }) {
   const s = STAT_STYLES[style];
   return (
-    <div
-      className="rounded-[20px] border p-5 shadow-[0_4px_24px_rgba(37,99,235,0.05)]"
-      style={{
-        background: `linear-gradient(135deg, ${s.wash} 0%, #FFFFFF 100%)`,
-        borderColor: s.border,
-      }}
+    <button
+      type="button"
+      onClick={onClick}
+      title={`View ${label} details`}
+      className="w-full cursor-pointer rounded-xl text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 hover:ring-1 hover:ring-blue-200"
     >
-      <div className="flex items-start justify-between">
-        <div
-          className="flex h-[50px] w-[50px] items-center justify-center rounded-full"
-          style={{ backgroundColor: s.circle }}
-        >
-          <Icon size={22} style={{ color: s.icon }} />
+      <div
+        className="rounded-[20px] border p-5 shadow-[0_4px_24px_rgba(37,99,235,0.05)]"
+        style={{
+          background: `linear-gradient(135deg, ${s.wash} 0%, #FFFFFF 100%)`,
+          borderColor: s.border,
+        }}
+      >
+        <div className="flex items-start justify-between">
+          <div
+            className="flex h-[50px] w-[50px] items-center justify-center rounded-full"
+            style={{ backgroundColor: s.circle }}
+          >
+            <Icon size={22} style={{ color: s.icon }} />
+          </div>
+          <TrendingUp size={18} style={{ color: s.icon }} aria-hidden="true" />
         </div>
-        <TrendingUp size={18} style={{ color: s.icon }} aria-hidden="true" />
+        <div className="mt-5">
+          <p className="text-[13px] font-bold uppercase tracking-wide text-ink-soft">{label}</p>
+          <p className="mt-1.5 text-[30px] font-extrabold leading-none tracking-tight text-ink">{value}</p>
+          <p className="mt-3 text-sm font-medium text-ink-soft" style={subColor ? { color: subColor } : undefined}>
+            {sub}
+          </p>
+        </div>
       </div>
-      <div className="mt-5">
-        <p className="text-[13px] font-bold uppercase tracking-wide text-ink-soft">{label}</p>
-        <p className="mt-1.5 text-[30px] font-extrabold leading-none tracking-tight text-ink">{value}</p>
-        <p className="mt-3 text-sm font-medium text-ink-soft" style={subColor ? { color: subColor } : undefined}>
-          {sub}
-        </p>
-      </div>
-    </div>
+    </button>
   );
 }
 
@@ -224,6 +234,7 @@ export default function DashboardOverview() {
   });
   const [pulse, setPulse] = useState<PulseItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [drilldownMetric, setDrilldownMetric] = useState<DrilldownMetric | null>(null);
 
   useEffect(() => {
     const init = () => {
@@ -374,13 +385,21 @@ export default function DashboardOverview() {
 
         {/* ── Stat cards */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <StatCard label="Total Staff" value={stats.total} icon={Users} style="blue" sub="Active personnel" />
+          <StatCard
+            label="Total Staff"
+            value={stats.total}
+            icon={Users}
+            style="blue"
+            sub="Active personnel"
+            onClick={() => setDrilldownMetric('total')}
+          />
           <StatCard
             label="Present Today"
             value={stats.present}
             icon={CalendarCheck}
             style="green"
             sub={`${attendanceRounded}% attendance`}
+            onClick={() => setDrilldownMetric('present')}
           />
           <StatCard
             label="On Leave"
@@ -389,9 +408,24 @@ export default function DashboardOverview() {
             style="purple"
             sub="Approved leave"
             subColor="#6D4AFF"
+            onClick={() => setDrilldownMetric('on-leave')}
           />
-          <StatCard label="Late Arrivals" value={stats.late} icon={Clock} style="amber" sub="Flagged today" />
-          <StatCard label="Absent" value={stats.absent} icon={UserX} style="rose" sub="Not checked in" />
+          <StatCard
+            label="Late Arrivals"
+            value={stats.late}
+            icon={Clock}
+            style="amber"
+            sub="Flagged today"
+            onClick={() => setDrilldownMetric('late')}
+          />
+          <StatCard
+            label="Absent"
+            value={stats.absent}
+            icon={UserX}
+            style="rose"
+            sub="Not checked in"
+            onClick={() => setDrilldownMetric('absent')}
+          />
         </div>
 
         {/* ── Main grid */}
@@ -506,6 +540,11 @@ export default function DashboardOverview() {
           </div>
         </div>
       </div>
+
+      <StatsDrilldownDialog
+        metric={drilldownMetric}
+        onClose={() => setDrilldownMetric(null)}
+      />
     </DashboardLayout>
   );
 }
