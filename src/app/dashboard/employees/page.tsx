@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import EmployeeDetailsDrawer from '@/components/employees/EmployeeDetailsDrawer';
+import DesignationSelect from '@/components/employees/DesignationSelect';
 import FilterChips from '@/components/filters/FilterChips';
 import {
   Select,
@@ -28,6 +29,7 @@ interface Employee {
   profile?: {
     employeeCode: string;
     designation: string;
+    designationId?: string | null;
     department: string;
   };
 }
@@ -129,7 +131,7 @@ export default function EmployeesPage() {
     phone: '',
     password: '',
     role: 'EMPLOYEE',
-    designation: '',
+    designationId: '',
     department: '',
     departmentId: '',
     employeeCode: '',
@@ -245,7 +247,7 @@ export default function EmployeesPage() {
       await api.post('/employees', newEmployee);
       setIsAddModalOpen(false);
       fetchEmployees();
-      setNewEmployee({ name: '', email: '', phone: '', password: '', role: 'EMPLOYEE', designation: '', department: '', departmentId: '', employeeCode: '', shiftProfileId: '' });
+      setNewEmployee({ name: '', email: '', phone: '', password: '', role: 'EMPLOYEE', designationId: '', department: '', departmentId: '', employeeCode: '', shiftProfileId: '' });
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { message?: string } } };
       const msg = e?.response?.data?.message || '';
@@ -291,6 +293,13 @@ export default function EmployeesPage() {
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setNewEmployee((p) => ({ ...p, [k]: e.target.value }));
+
+  const setDepartment = (e: React.ChangeEvent<HTMLSelectElement>) =>
+    setNewEmployee((p) => ({
+      ...p,
+      departmentId: e.target.value,
+      designationId: '',
+    }));
 
   return (
     <DashboardLayout>
@@ -678,18 +687,12 @@ export default function EmployeesPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <Field
-                  label="Designation"
-                  value={newEmployee.designation}
-                  onChange={set('designation')}
-                  placeholder="Software Engineer"
-                />
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium text-slate-600">Department</label>
                   <div className="relative">
                     <select
                       value={newEmployee.departmentId}
-                      onChange={set('departmentId')}
+                      onChange={setDepartment}
                       className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                     >
                       <option value="">Unassigned</option>
@@ -699,6 +702,16 @@ export default function EmployeesPage() {
                     </select>
                     <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-slate-600">Designation</label>
+                  <DesignationSelect
+                    departmentId={newEmployee.departmentId}
+                    value={newEmployee.designationId}
+                    onChange={(designationId) =>
+                      setNewEmployee((p) => ({ ...p, designationId }))
+                    }
+                  />
                 </div>
               </div>
 

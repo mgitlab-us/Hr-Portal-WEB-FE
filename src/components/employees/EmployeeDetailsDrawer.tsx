@@ -8,6 +8,7 @@ import {
   DollarSign, Landmark, Save, X
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import DesignationSelect from '@/components/employees/DesignationSelect';
 import { format } from 'date-fns';
 
 interface Employee {
@@ -22,6 +23,7 @@ interface Employee {
   profile?: {
     employeeCode: string;
     designation: string;
+    designationId?: string | null;
     department: string;
     phone?: string;
     baseSalary?: string;
@@ -74,6 +76,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
     bankName: '',
     accountNumber: '',
     designation: '',
+    designationId: '',
     phone: '',
     departmentId: '',
     shiftProfileId: ''
@@ -99,6 +102,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         bankName: p?.bankName || '',
         accountNumber: p?.accountNumber || '',
         designation: p?.designation || '',
+        designationId: p?.designationId || (p?.designation ? '__legacy__' : ''),
         phone: p?.phone || '',
         departmentId: empRes.data.departmentId || '',
         shiftProfileId: empRes.data.shiftProfileId || ''
@@ -134,15 +138,24 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
   const handleUpdateProfile = async () => {
     setSaving(true);
     try {
-      await api.patch(`/employees/${employeeId}`, {
-        designation: editInfo.designation,
+      const payload: Record<string, unknown> = {
         phone: editInfo.phone,
         departmentId: editInfo.departmentId || null,
         shiftProfileId: editInfo.shiftProfileId || null,
         baseSalary: parseFloat(editInfo.baseSalary) || 0,
         bankName: editInfo.bankName,
         accountNumber: editInfo.accountNumber
-      });
+      };
+
+      if (editInfo.designationId === '__legacy__') {
+        if (editInfo.designation.trim()) {
+          payload.designation = editInfo.designation.trim();
+        }
+      } else {
+        payload.designationId = editInfo.designationId || null;
+      }
+
+      await api.patch(`/employees/${employeeId}`, payload);
       fetchData();
     } catch {
       alert('Failed to update employee information');
@@ -306,10 +319,19 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Designation</label>
-                    <input
-                      value={editInfo.designation}
-                      onChange={e => setEditInfo(p => ({ ...p, designation: e.target.value }))}
-                      className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
+                    <DesignationSelect
+                      departmentId={editInfo.departmentId}
+                      value={editInfo.designationId}
+                      onChange={(designationId) =>
+                        setEditInfo(p => ({ ...p, designationId }))
+                      }
+                      legacyLabel={
+                        !employee?.profile?.designationId &&
+                        editInfo.departmentId === (employee?.departmentId || '') &&
+                        employee?.profile?.designation
+                          ? employee.profile.designation
+                          : null
+                      }
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -326,7 +348,14 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Department</label>
                     <select
                       value={editInfo.departmentId}
-                      onChange={e => setEditInfo(p => ({ ...p, departmentId: e.target.value }))}
+                      onChange={e =>
+                        setEditInfo(p => ({
+                          ...p,
+                          departmentId: e.target.value,
+                          designationId: '',
+                          designation: '',
+                        }))
+                      }
                       className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
                     >
                       <option value="">Unassigned</option>
