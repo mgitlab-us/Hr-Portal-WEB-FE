@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatWeekdayDateDMY } from '@/lib/datetime';
 import { useAuthStore } from '@/store/authStore';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
@@ -43,12 +44,27 @@ interface ShiftProfile {
   id: string;
   name: string;
   isDefault: boolean;
+  workMinutesPerDay?: number;
+  breakMinutesAllocated?: number;
+  gracePeriodMinutes?: number;
+  expectedCheckinHour?: number;
+  expectedCheckinMinute?: number;
 }
 
 interface DepartmentConfig {
   shiftProfileId: string | null;
+  shiftProfile?: ShiftProfile | null;
   weekends: number[];
   gracePeriodMinutes: number | null;
+}
+
+interface CompanyProfile {
+  weekends: number[];
+  workMinutesPerDay: number;
+  breakMinutesAllocated: number;
+  gracePeriodMinutes: number;
+  expectedCheckinHour: number;
+  expectedCheckinMinute: number;
 }
 
 interface DepartmentHoliday {
@@ -71,15 +87,8 @@ interface Designation {
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const formatHolidayDate = (value: string) => {
-  const key = value.slice(0, 10);
-  return new Date(`${key}T00:00:00`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
+const formatHolidayDate = (value: string) =>
+  formatWeekdayDateDMY(value.slice(0, 10));
 
 const apiMessage = (error: unknown, fallback: string) => {
   const requestError = error as { response?: { data?: { message?: string } } };
@@ -198,6 +207,15 @@ export default function DepartmentConfigPanel({
     weekends: [0] as number[],
     gracePeriodMinutes: '',
   });
+  const [shiftForm, setShiftForm] = useState({
+    name: '',
+    checkinHour: '9',
+    checkinMinute: '00',
+    period: 'AM' as 'AM' | 'PM',
+    workMinutes: '480',
+    breakMinutes: '60',
+    graceMinutes: '10',
+  });
   const [policyForm, setPolicyForm] = useState({
     sickLeaveDays: '8',
     casualLeaveDays: '10',
@@ -209,6 +227,7 @@ export default function DepartmentConfigPanel({
   const [editingDesignationName, setEditingDesignationName] = useState('');
 
   const [savingConfig, setSavingConfig] = useState(false);
+  const [savingShift, setSavingShift] = useState(false);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [addingHoliday, setAddingHoliday] = useState(false);
   const [deletingHolidayId, setDeletingHolidayId] = useState<string | null>(null);
@@ -272,29 +291,58 @@ export default function DepartmentConfigPanel({
       setLoadError(null);
       setSavedMessage(null);
       try {
-        const [configResponse, holidayResponse, policyResponse, designationResponse] =
-          await Promise.all([
-            api.get(`/departments/${activeDeptId}/config`),
-            api.get(`/departments/${activeDeptId}/holidays`),
-            api.get(`/departments/${activeDeptId}/leave-policy`),
-            api.get('/designations', { params: { departmentId: activeDeptId } }),
-          ]);
+        const [
+          configResponse,
+          holidayResponse,
+          policyResponse,
+          designationResponse,
+          companyResponse,
+        ] = await Promise.all([
+          api.get(`/departments/${activeDeptId}/config`),
+          api.get(`/departments/${activeDeptId}/holidays`),
+          api.get(`/departments/${activeDeptId}/leave-policy`),
+          api.get('/designations', { params: { departmentId: activeDeptId } }),
+          api
+            .get('/attendance/settings/company-profile')
+            .catch(() => ({ data: null as CompanyProfile | null })),
+        ]);
 
         if (!active) return;
 
         const nextConfig = (configResponse.data ?? null) as DepartmentConfig | null;
         const nextPolicy = (policyResponse.data ?? null) as DepartmentLeavePolicy | null;
+        const company = (companyResponse.data ?? null) as CompanyProfile | null;
+        const effectiveShift = nextConfig?.shiftProfile ?? null;
+        const checkinHour = effectiveShift?.expectedCheckinHour ?? company?.expectedCheckinHour ?? 9;
+        const checkinPeriod: 'AM' | 'PM' = checkinHour >= 12 ? 'PM' : 'AM';
 
         setHolidays(holidayResponse.data ?? []);
         setDesignations(designationResponse.data ?? []);
         setConfigForm({
           shiftProfileId: nextConfig?.shiftProfileId ?? '',
-          weekends: nextConfig?.weekends ?? [0],
+          weekends: nextConfig?.weekends ?? company?.weekends ?? [0],
           gracePeriodMinutes:
             nextConfig?.gracePeriodMinutes !== null &&
             nextConfig?.gracePeriodMinutes !== undefined
               ? String(nextConfig.gracePeriodMinutes)
               : '',
+        });
+        setShiftForm({
+          name: effectiveShift?.name ?? `${activeDepartment?.name ?? 'Department'} shift`,
+          checkinHour: String(checkinHour % 12 || 12),
+          checkinMinute: String(
+            effectiveShift?.expectedCheckinMinute ?? company?.expectedCheckinMinute ?? 0
+          ).padStart(2, '0'),
+          period: checkinPeriod,
+          workMinutes: String(
+            effectiveShift?.workMinutesPerDay ?? company?.workMinutesPerDay ?? 480
+          ),
+          breakMinutes: String(
+            effectiveShift?.breakMinutesAllocated ?? company?.breakMinutesAllocated ?? 60
+          ),
+          graceMinutes: String(
+            effectiveShift?.gracePeriodMinutes ?? company?.gracePeriodMinutes ?? 10
+          ),
         });
         setPolicyForm({
           sickLeaveDays: String(nextPolicy?.sickLeaveDays ?? 8),
@@ -318,7 +366,7 @@ export default function DepartmentConfigPanel({
     return () => {
       active = false;
     };
-  }, [activeDeptId, reload]);
+  }, [activeDeptId, activeDepartment?.name, reload]);
 
   const toggleWeekend = (day: number) => {
     setConfigForm((current) => {
@@ -348,6 +396,43 @@ export default function DepartmentConfigPanel({
       toast.error(apiMessage(error, 'Failed to save department work settings.'));
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  const saveDepartmentShift = async () => {
+    if (!activeDeptId) return;
+    if (!shiftForm.name.trim()) {
+      toast.error('Give the department shift a name.');
+      return;
+    }
+    setSavingShift(true);
+    setSavedMessage(null);
+    try {
+      const hour12 = Math.min(12, Math.max(1, Number.parseInt(shiftForm.checkinHour, 10) || 9));
+      const minute = Math.min(59, Math.max(0, Number.parseInt(shiftForm.checkinMinute, 10) || 0));
+      const expectedCheckinHour =
+        shiftForm.period === 'PM'
+          ? (hour12 % 12) + 12
+          : hour12 % 12;
+
+      await api.put(`/departments/${activeDeptId}/shift`, {
+        name: shiftForm.name.trim(),
+        expectedCheckinHour,
+        expectedCheckinMinute: minute,
+        workMinutesPerDay: Math.max(60, Number.parseInt(shiftForm.workMinutes, 10) || 480),
+        breakMinutesAllocated: Math.max(
+          0,
+          Number.parseInt(shiftForm.breakMinutes, 10) || 0
+        ),
+        gracePeriodMinutes: Math.max(0, Number.parseInt(shiftForm.graceMinutes, 10) || 0),
+      });
+      setSavedMessage('Department shift saved and applied to its employees.');
+      setReload((value) => value + 1);
+      setReferenceReload((value) => value + 1);
+    } catch (error) {
+      toast.error(apiMessage(error, 'Failed to save the department shift.'));
+    } finally {
+      setSavingShift(false);
     }
   };
 
@@ -744,6 +829,132 @@ export default function DepartmentConfigPanel({
                   )}
                 </div>
 
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                  <div className="mb-3">
+                    <p className="text-xs font-semibold text-slate-800">Department shift rule</p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      Create or update a shift for this department only. Saving applies it to
+                      employees who inherit the department schedule, without editing them one by one.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Shift name
+                      </label>
+                      <input
+                        value={shiftForm.name}
+                        onChange={(event) =>
+                          setShiftForm((current) => ({ ...current, name: event.target.value }))
+                        }
+                        placeholder="e.g. Engineering day shift"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+                      />
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Start time
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min={1}
+                            max={12}
+                            value={shiftForm.checkinHour}
+                            onChange={(event) =>
+                              setShiftForm((current) => ({
+                                ...current,
+                                checkinHour: event.target.value,
+                              }))
+                            }
+                            className="h-10 w-14 rounded-xl border border-slate-200 bg-white px-2 text-center text-sm font-semibold text-slate-800 outline-none focus:border-blue-400"
+                          />
+                          <span className="text-sm font-bold text-slate-400">:</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={59}
+                            value={shiftForm.checkinMinute}
+                            onChange={(event) =>
+                              setShiftForm((current) => ({
+                                ...current,
+                                checkinMinute: event.target.value.padStart(2, '0').slice(0, 2),
+                              }))
+                            }
+                            className="h-10 w-14 rounded-xl border border-slate-200 bg-white px-2 text-center text-sm font-semibold text-slate-800 outline-none focus:border-blue-400"
+                          />
+                          <select
+                            value={shiftForm.period}
+                            onChange={(event) =>
+                              setShiftForm((current) => ({
+                                ...current,
+                                period: event.target.value as 'AM' | 'PM',
+                              }))
+                            }
+                            className="h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 outline-none focus:border-blue-400"
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Work / break / grace
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[
+                            ['workMinutes', 'Work'],
+                            ['breakMinutes', 'Break'],
+                            ['graceMinutes', 'Grace'],
+                          ].map(([key, label]) => (
+                            <div key={key} className="relative">
+                              <input
+                                type="number"
+                                min={key === 'workMinutes' ? 60 : 0}
+                                value={shiftForm[key as 'workMinutes' | 'breakMinutes' | 'graceMinutes']}
+                                onChange={(event) =>
+                                  setShiftForm((current) => ({
+                                    ...current,
+                                    [key]: event.target.value,
+                                  }))
+                                }
+                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2 pr-7 text-center text-sm font-semibold text-slate-800 outline-none focus:border-blue-400"
+                              />
+                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-semibold uppercase text-slate-400">
+                                min
+                              </span>
+                              <p className="mt-1 text-center text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                                {label}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={saveDepartmentShift}
+                        disabled={savingShift}
+                        className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3.5 py-2 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {savingShift ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Save size={13} />
+                        )}
+                        Save department shift
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                     Weekend days
@@ -850,8 +1061,10 @@ export default function DepartmentConfigPanel({
                   />
                 </div>
                 <p className="text-[11px] leading-relaxed text-slate-400">
-                  These values override the company defaults for leave requests in this department.
-                  Existing balances are not recalculated automatically.
+                  Each employee gets these days individually — this is not a shared department
+                  pool. Their leave cycle runs from their joining anniversary, unused days carry
+                  forward, and the current cycle follows the latest policy. Completed cycles stay
+                  frozen.
                 </p>
                 <div className="flex justify-end border-t border-slate-50 pt-4">
                   <button

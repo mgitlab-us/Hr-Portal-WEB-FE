@@ -135,9 +135,6 @@ export default function DepartmentsPage() {
       <div className="p-6 lg:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-              Super Admin · Organisation
-            </p>
             <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Departments</h1>
             <p className="text-sm text-slate-400 mt-0.5">
               Create departments and assign HR admins to manage them

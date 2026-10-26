@@ -4,11 +4,14 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, MoreVertical, Trash2, Power, DollarSign } from 'lucide-react';
 import { api } from '@/lib/api';
+import { todayDateKey } from '@/lib/datetime';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import EmployeeDetailsDrawer from '@/components/employees/EmployeeDetailsDrawer';
+import CredentialsShareModal from '@/components/employees/CredentialsShareModal';
 import DesignationSelect from '@/components/employees/DesignationSelect';
 import FilterChips from '@/components/filters/FilterChips';
+import { useToast } from '@/components/ui/toast';
 import {
   Select,
   SelectContent,
@@ -114,6 +117,7 @@ function Field({
 }
 
 export default function EmployeesPage() {
+  const { toast } = useToast();
   const { user } = useAuthStore();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,14 +133,20 @@ export default function EmployeesPage() {
     name: '',
     email: '',
     phone: '',
-    password: '',
     role: 'EMPLOYEE',
     designationId: '',
     department: '',
     departmentId: '',
     employeeCode: '',
     shiftProfileId: '',
+    joiningDate: todayDateKey(),
   });
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    name: string;
+    email: string;
+    password: string;
+    employeeCode: string;
+  } | null>(null);
   const [shifts, setShifts] = useState<ShiftProfile[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ type: 'DEACTIVATE' | 'ARCHIVE'; id: string; name: string } | null>(null);
@@ -146,8 +156,11 @@ export default function EmployeesPage() {
   const canManageEmployee = (emp: Employee) => {
     if (user?.role === 'SUPER_ADMIN') return true;
     if (user?.role === 'ADMIN') {
-      const myDept = departments.find((d: Department) => d.admin?.id === user?.id);
-      return !!myDept && (emp.departmentId === myDept.id || emp.department?.id === myDept.id);
+      const managedDepartmentIds = departments
+        .filter((d: Department) => d.admin?.id === user?.id)
+        .map((d) => d.id);
+      const employeeDepartmentId = emp.departmentId || emp.department?.id;
+      return !!employeeDepartmentId && managedDepartmentIds.includes(employeeDepartmentId);
     }
     return false;
   };
@@ -178,12 +191,6 @@ export default function EmployeesPage() {
       api.get('/shifts').then(res => setShifts(res.data)).catch(() => { });
       api.get('/departments').then(res => {
         setDepartments(res.data);
-        if (user?.role === 'ADMIN') {
-          const myDept = (res.data as Department[]).find((d) => d.admin?.id === user?.id);
-          if (myDept) {
-            setDepartmentFilter(myDept.id);
-          }
-        }
       }).catch(() => { });
     };
     init();
@@ -239,22 +246,62 @@ export default function EmployeesPage() {
   const expandedEmployee =
     employees.find((emp) => emp.id === expandedEmployeeId) ?? null;
 
+  /** Generate a secure random temporary password */
+  const generateTempPassword = () => {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const special = '@#!$';
+    const all = upper + lower + digits + special;
+    const rand = (s: string) => s[Math.floor(Math.random() * s.length)];
+    const base = rand(upper) + rand(lower) + rand(digits) + rand(special);
+    const rest = Array.from({ length: 6 }, () => rand(all)).join('');
+    return (base + rest).split('').sort(() => Math.random() - 0.5).join('');
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setEmployeeCodeError(null);
+    const tempPassword = generateTempPassword();
     try {
-      await api.post('/employees', newEmployee);
+      const res = await api.post('/employees', {
+        ...newEmployee,
+        joiningDate: newEmployee.joiningDate
+          ? new Date(`${newEmployee.joiningDate}T00:00:00.000Z`).toISOString()
+          : undefined,
+        password: tempPassword,
+        mustChangePassword: true,
+      });
+      const createdEmp = res.data as { name?: string; email?: string; profile?: { employeeCode?: string } };
       setIsAddModalOpen(false);
       fetchEmployees();
-      setNewEmployee({ name: '', email: '', phone: '', password: '', role: 'EMPLOYEE', designationId: '', department: '', departmentId: '', employeeCode: '', shiftProfileId: '' });
+      setNewEmployee({
+        name: '',
+        email: '',
+        phone: '',
+        role: 'EMPLOYEE',
+        designationId: '',
+        department: '',
+        departmentId: '',
+        employeeCode: '',
+        shiftProfileId: '',
+        joiningDate: todayDateKey(),
+      });
+      // Show credential card
+      setCreatedCredentials({
+        name: createdEmp?.name || newEmployee.name,
+        email: createdEmp?.email || newEmployee.email,
+        password: tempPassword,
+        employeeCode: createdEmp?.profile?.employeeCode || newEmployee.employeeCode || '—',
+      });
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { message?: string } } };
       const msg = e?.response?.data?.message || '';
       if (e?.response?.status === 409 && msg.toLowerCase().includes('code')) {
         setEmployeeCodeError('This Employee ID is already in use. Please edit the ID field below.');
       } else {
-        alert(msg || 'Failed to create employee. Please check if email is unique.');
+        toast.error(msg || 'Failed to create employee. Please check if the email is unique.');
       }
     } finally {
       setSubmitting(false);
@@ -267,7 +314,7 @@ export default function EmployeesPage() {
       setConfirmModal(null);
       fetchEmployees();
     } catch {
-      alert('Action failed.');
+      toast.error('Action failed.');
     }
   };
 
@@ -277,7 +324,7 @@ export default function EmployeesPage() {
       setConfirmModal(null);
       fetchEmployees();
     } catch {
-      alert('Action failed.');
+      toast.error('Action failed.');
     }
   };
 
@@ -308,9 +355,6 @@ export default function EmployeesPage() {
         {/* ── Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-              Admin · Directory
-            </p>
             <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">
               Staff Directory
             </h1>
@@ -667,41 +711,45 @@ export default function EmployeesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <Field
-                  label="Mobile number"
-                  required
-                  type="tel"
-                  value={newEmployee.phone}
-                  onChange={set('phone')}
-                  placeholder="+92 300 1234567"
-                />
-                <Field
-                  label="Initial password"
-                  required
-                  type="password"
-                  value={newEmployee.password}
-                  onChange={set('password')}
-                  placeholder="Minimum 6 characters"
-                />
-              </div>
+              <Field
+                label="Mobile number"
+                required
+                type="tel"
+                value={newEmployee.phone}
+                onChange={set('phone')}
+                placeholder="+92 300 1234567"
+              />
+
+              <Field
+                label="Joining date"
+                required
+                type="date"
+                value={newEmployee.joiningDate}
+                onChange={set('joiningDate')}
+              />
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium text-slate-600">Department</label>
-                  <div className="relative">
-                    <select
-                      value={newEmployee.departmentId}
-                      onChange={setDepartment}
-                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                    >
-                      <option value="">Unassigned</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  </div>
+                  {departments.length === 0 ? (
+                    <div className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-500">
+                      Unassigned
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <select
+                        value={newEmployee.departmentId}
+                        onChange={setDepartment}
+                        className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                      >
+                        <option value="">Unassigned</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium text-slate-600">Designation</label>
@@ -749,28 +797,40 @@ export default function EmployeesPage() {
                       className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                     >
                       <option value="EMPLOYEE">Employee</option>
-                      <option value="ADMIN">Admin (HR Manager)</option>
+                      {user?.role === 'SUPER_ADMIN' && (
+                        <option value="ADMIN">Admin (HR Manager)</option>
+                      )}
                     </select>
                     <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
-                {/* Shift select */}
+                {/* Shift select — company templates are super-admin only */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium text-slate-600">Shift Profile</label>
-                  <div className="relative">
-                    <select
-                      value={newEmployee.shiftProfileId}
-                      onChange={set('shiftProfileId')}
-                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                    >
-                      <option value="">Default (Company settings)</option>
-                      {shifts.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  </div>
+                  {user?.role !== 'SUPER_ADMIN' ? (
+                    <div className="w-full rounded-lg border border-blue-100 bg-blue-50/60 py-2.5 px-3 text-sm text-blue-700">
+                      Inherits the selected department&apos;s shift automatically
+                    </div>
+                  ) : shifts.length === 0 ? (
+                    <div className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-500">
+                      Default (Company settings)
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <select
+                        value={newEmployee.shiftProfileId}
+                        onChange={set('shiftProfileId')}
+                        className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                      >
+                        <option value="">Default (Company settings)</option>
+                        {shifts.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -796,6 +856,17 @@ export default function EmployeesPage() {
           </div>
         </div>
       )}
+
+      {/* ── Credentials Share Modal */}
+      <CredentialsShareModal
+        isOpen={!!createdCredentials}
+        credentials={createdCredentials}
+        onClose={() => setCreatedCredentials(null)}
+        onAddAnother={() => {
+          setCreatedCredentials(null);
+          setIsAddModalOpen(true);
+        }}
+      />
 
       <AnimatePresence>
         {expandedEmployee && (

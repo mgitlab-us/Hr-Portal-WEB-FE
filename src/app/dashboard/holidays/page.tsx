@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Calendar, Plus, X, Loader2, Trash2, Info, Building2 } from 'lucide-react';
+import { Calendar, Plus, X, Loader2, Trash2, Info, Building2, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatLongDateDMY } from '@/lib/datetime';
+import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
@@ -24,6 +26,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function HolidaysPage() {
   const { toast } = useToast();
+  const { user } = useAuthStore();
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [weekends, setWeekends] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +36,11 @@ export default function HolidaysPage() {
   const [deleting, setDeleting] = useState(false);
   const [newHoliday, setNewHoliday] = useState({ name: '', date: '' });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (user?.role !== 'SUPER_ADMIN') {
+      setLoading(false);
+      return;
+    }
     try {
       const [hRes, cRes] = await Promise.all([
         api.get('/holidays'),
@@ -47,12 +54,12 @@ export default function HolidaysPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.role]);
 
   useEffect(() => {
-    const init = async () => { await fetchData(); };
-    init();
-  }, []);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchData();
+  }, [fetchData]);
 
   const handleToggleWeekend = async (dayIndex: number) => {
     const updated = weekends.includes(dayIndex)
@@ -105,6 +112,25 @@ export default function HolidaysPage() {
       setDeleting(false);
     }
   };
+
+  if (user && user.role !== 'SUPER_ADMIN') {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50">
+            <Lock size={16} className="text-red-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Access Restricted</p>
+            <p className="mt-1 max-w-xs text-xs text-slate-400">
+              Company holidays are managed by the Super Admin. Add department holidays from
+              Department Setup instead.
+            </p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -210,11 +236,7 @@ export default function HolidaysPage() {
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-sm text-slate-500 tabular-nums">
-                            {new Date(h.date).toLocaleDateString('en-GB', {
-                              day: '2-digit',
-                              month: 'long',
-                              year: 'numeric'
-                            })}
+                            {formatLongDateDMY(h.date)}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">

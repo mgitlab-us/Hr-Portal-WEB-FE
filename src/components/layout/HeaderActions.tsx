@@ -17,6 +17,7 @@ import {
   CornerDownLeft,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { formatTime12h } from '@/lib/datetime';
 import { getNavItems } from '@/components/layout/DashboardLayout';
 
 export interface NotificationItem {
@@ -219,7 +220,7 @@ export default function HeaderActions({
                         <p className="truncate pr-5 text-xs font-semibold leading-tight text-ink">{notif.title}</p>
                         <p className="mt-0.5 text-[11px] leading-snug text-ink-soft">{notif.message}</p>
                         <span className="mt-1 block text-[10px] text-ink-faint">
-                          {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatTime12h(notif.timestamp, user?.company?.timezone)}
                         </span>
                       </div>
                       <button

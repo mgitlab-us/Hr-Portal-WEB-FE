@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { History, Plus, X, Clock, Loader2, Trash2, ChevronDown, Pencil } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { History, Plus, X, Clock, Loader2, Trash2, ChevronDown, Pencil, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
@@ -26,6 +27,7 @@ interface ShiftProfile {
 
 export default function ShiftsPage() {
   const { toast } = useToast();
+  const { user } = useAuthStore();
   const [shifts, setShifts] = useState<ShiftProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -45,7 +47,11 @@ export default function ShiftsPage() {
     isDefault: false,
   });
 
-  const fetchShifts = async () => {
+  const fetchShifts = useCallback(async () => {
+    if (user?.role !== 'SUPER_ADMIN') {
+      setLoading(false);
+      return;
+    }
     try {
       const res = await api.get('/shifts');
       setShifts(res.data);
@@ -54,12 +60,12 @@ export default function ShiftsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.role]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchShifts();
-  }, []);
+    void fetchShifts();
+  }, [fetchShifts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,6 +170,25 @@ export default function ShiftsPage() {
 
   const selectSmCls =
     'w-full appearance-none bg-white border border-slate-300 rounded-lg py-2 px-2 text-sm font-medium text-slate-700 pr-6';
+
+  if (user && user.role !== 'SUPER_ADMIN') {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50">
+            <Lock size={16} className="text-red-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Access Restricted</p>
+            <p className="mt-1 max-w-xs text-xs text-slate-400">
+              Company shift templates are managed by the Super Admin. Use Department Setup for
+              your department&apos;s shift rule.
+            </p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

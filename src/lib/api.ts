@@ -5,6 +5,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1
 
 export const api = axios.create({
   baseURL: API_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -67,9 +68,11 @@ api.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) throw new Error('No refresh token');
-
-        const res = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+        const res = await axios.post(
+          `${API_URL}/auth/refresh`,
+          refreshToken ? { refreshToken } : {},
+          { withCredentials: true }
+        );
         const { accessToken, refreshToken: newRefreshToken } = res.data;
         
         localStorage.setItem('accessToken', accessToken);

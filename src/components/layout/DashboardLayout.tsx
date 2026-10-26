@@ -8,15 +8,13 @@ import {
   Clock,
   FileCheck,
   Plane,
-  Settings,
   Menu,
   X,
-  History,
-  Calendar,
   Building2,
   ChevronsLeft,
   ChevronsRight,
   BarChart3,
+  Wrench,
   Megaphone,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
@@ -45,14 +43,12 @@ export interface NavEntry {
 const baseNavItems: NavEntry[] = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
   { href: '/dashboard/employees', icon: Users, label: 'Employees' },
-  { href: '/dashboard/shifts', icon: History, label: 'Shifts' },
   { href: '/dashboard/attendance', icon: Clock, label: 'Attendance' },
   { href: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/dashboard/notice-board', icon: Megaphone, label: 'Notice Board' },
   { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
   { href: '/dashboard/leaves', icon: Plane, label: 'Leaves' },
-  { href: '/dashboard/holidays', icon: Calendar, label: 'Holidays' },
-  { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
+  { href: '/dashboard/settings', icon: Wrench, label: 'Company Setup' },
 ];
 
 const superAdminNavItems: NavEntry[] = [

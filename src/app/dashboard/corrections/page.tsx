@@ -4,6 +4,7 @@ import {
   CheckCircle2, MessageSquare, ChevronRight, Loader2, Calendar, Check, X, ArrowRight,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatDayMonth, formatTime12h, formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useToast } from '@/components/ui/toast';
 
@@ -25,19 +26,11 @@ interface CorrectionRequest {
 
 const formatTo12h = (dateStr: string | null) => {
   if (!dateStr) return '--:--';
-  return new Date(dateStr).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return formatTime12h(dateStr);
 };
 
 const formatDate = (dateStr: string, short = false) =>
-  new Date(dateStr).toLocaleDateString('en-US',
-    short
-      ? { month: 'short', day: 'numeric' }
-      : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
-  );
+  short ? formatDayMonth(dateStr) : formatWeekdayDateDMY(dateStr);
 
 const AVATAR_COLORS = [
   '#6366F1', '#0D9E7A', '#F59E0B', '#E8405A', '#8B5CF6', '#2563EB',

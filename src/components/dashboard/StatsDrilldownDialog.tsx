@@ -12,6 +12,7 @@ import {
   UserX,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatDateDMY } from '@/lib/datetime';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -120,11 +121,7 @@ const LEAVE_LABELS: Record<string, string> = {
   OTHER: 'Other leave',
 };
 
-const formatCalendarDate = (value: string) =>
-  new Date(`${value}T00:00:00`).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+const formatCalendarDate = (value: string) => formatDateDMY(value);
 
 const formatLeaveRange = (start: string | null, end: string | null) => {
   if (!start && !end) return 'Approved';

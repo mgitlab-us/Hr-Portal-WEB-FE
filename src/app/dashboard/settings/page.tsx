@@ -1,454 +1,144 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Clock, Save, Loader2, ShieldCheck, Building2, Timer, ChevronDown, Globe, Lock } from 'lucide-react';
-import { api } from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
+import React, { Suspense, lazy } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Loader2, Wrench, History, Calendar, Settings2, Lock, Building2 } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { useAuthStore } from '@/store/authStore';
 
-const formatMinutes = (totalMinutes: number) => ({
-  h: Math.floor(totalMinutes / 60),
-  m: totalMinutes % 60,
-});
+// ── Lazy-loaded tab panels (no DashboardLayout inside them)
+const GeneralPanel = lazy(() => import('./panels/GeneralPanel'));
+const ShiftsPanel = lazy(() => import('./panels/ShiftsPanel'));
+const HolidaysPanel = lazy(() => import('./panels/HolidaysPanel'));
+const DepartmentConfigPanel = lazy(
+  () => import('@/components/departments/DepartmentConfigPanel')
+);
 
-const MAX_LOGO_SIZE_MB = 1;
+type TabId = 'general' | 'departments' | 'shifts' | 'holidays';
 
-function NumInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+const TABS: { id: TabId; label: string; icon: React.ReactNode; superAdminOnly?: boolean }[] = [
+  { id: 'general', label: 'Company defaults', icon: <Settings2 size={15} />, superAdminOnly: true },
+  { id: 'departments', label: 'Departments', icon: <Building2 size={15} /> },
+  { id: 'shifts', label: 'Shift templates', icon: <History size={15} />, superAdminOnly: true },
+  { id: 'holidays', label: 'Company holidays', icon: <Calendar size={15} />, superAdminOnly: true },
+];
+
+function TabPanelLoader() {
   return (
-    <div className="space-y-1">
-      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{label}</label>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value) || 0)}
-        className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 text-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-      />
+    <div className="flex items-center justify-center py-24">
+      <Loader2 size={18} className="text-slate-400 animate-spin" />
     </div>
   );
 }
 
-export default function SettingsPage() {
+function CompanySetupContent() {
   const { user } = useAuthStore();
-  const [mounted, setMounted] = useState(false);
-  const [settings, setSettings] = useState({
-    workMinutesPerDay: 480,
-    breakMinutesAllocated: 60,
-    gracePeriodMinutes: 15,
-    expectedCheckinHour: 9,
-    expectedCheckinMinute: 0,
-  });
-  const [profile, setProfile] = useState({
-    name: '',
-    timezone: 'Asia/Karachi',
-    officeLat: 24.8607,
-    officeLng: 67.0011,
-    officeRadius: 70,
-    logo: null as string | null,
-  });
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [logoError, setLogoError] = useState<string | null>(null);
-  const [gettingLocation, setGettingLocation] = useState(false);
+  // Filter tabs by role before resolving the query param so a deep link cannot
+  // open a super-admin-only panel for an HR admin.
+  const visibleTabs = TABS.filter(t => !(t.superAdminOnly && user?.role !== 'SUPER_ADMIN'));
+  const defaultTab: TabId = user?.role === 'SUPER_ADMIN' ? 'general' : 'departments';
+  const tabParam = searchParams.get('tab') as TabId | null;
+  const activeTab: TabId =
+    tabParam && visibleTabs.some(t => t.id === tabParam) ? tabParam : defaultTab;
 
-  const getCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser');
-      return;
-    }
-    setGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setProfile((prev) => ({
-          ...prev,
-          officeLat: pos.coords.latitude,
-          officeLng: pos.coords.longitude,
-        }));
-        setGettingLocation(false);
-      },
-      (err) => {
-        alert('Failed to get location: ' + err.message);
-        setGettingLocation(false);
-      }
+  const setTab = (id: TabId) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', id);
+    router.replace(`/dashboard/settings?${params.toString()}`, { scroll: false });
+  };
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-[60vh]">
+          <Loader2 size={18} className="text-slate-400 animate-spin" />
+        </div>
+      </DashboardLayout>
     );
-  };
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoError(null);
-
-    if (!file.type.startsWith('image/')) {
-      setLogoError('Please upload an image file.');
-      return;
-    }
-    if (file.size > MAX_LOGO_SIZE_MB * 1024 * 1024) {
-      setLogoError(`Logo must be smaller than ${MAX_LOGO_SIZE_MB}MB.`);
-      return;
-    }
-    if (file.type !== 'image/png') {
-      setLogoError(null); // not a hard error — just informational below
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setProfile((prev) => ({ ...prev, logo: reader.result as string }));
-    };
-    reader.onerror = () => setLogoError('Could not read that file, please try again.');
-    reader.readAsDataURL(file);
-
-    // Reset the input so re-selecting the same file re-triggers onChange
-    e.target.value = '';
-  };
-
-  const handleRemoveLogo = () => {
-    setProfile((prev) => ({ ...prev, logo: null }));
-    setLogoError(null);
-  };
-
-  const [loading, setLoading] = useState(true);
-  const [savingShift, setSavingShift] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [localCheckin, setLocalCheckin] = useState<{ hour: number; minute: number; period: 'AM' | 'PM' }>(
-    { hour: 9, minute: 0, period: 'AM' }
-  );
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    const fetchData = async () => {
-      try {
-        const [shiftRes, profileRes] = await Promise.all([
-          api.get('/attendance/settings/company-shift'),
-          api.get('/attendance/settings/company-profile'),
-        ]);
-        setSettings(shiftRes.data);
-        setProfile((prev) => ({ ...prev, ...profileRes.data }));
-        const h24 = shiftRes.data.expectedCheckinHour;
-        setLocalCheckin({ hour: h24 % 12 || 12, minute: shiftRes.data.expectedCheckinMinute, period: h24 >= 12 ? 'PM' : 'AM' });
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
-    };
-    if (user?.role === 'SUPER_ADMIN') {
-      fetchData();
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLoading(false);
-    }
-  }, [user, mounted]);
-
-  const handleSaveShift = async () => {
-    setSavingShift(true);
-    let h24 = localCheckin.hour % 12;
-    if (localCheckin.period === 'PM') h24 += 12;
-    try {
-      await api.put('/attendance/settings/company-shift', { ...settings, expectedCheckinHour: h24, expectedCheckinMinute: localCheckin.minute });
-      alert('Shift settings updated!');
-    } catch { alert('Action failed.'); }
-    finally { setSavingShift(false); }
-  };
-
-  const handleSaveProfile = async () => {
-    setSavingProfile(true);
-    try {
-      await api.put('/attendance/settings/company-profile', profile);
-      alert('Profile updated!');
-    } catch { alert('Action failed.'); }
-    finally { setSavingProfile(false); }
-  };
-
-  if (!mounted) return (
-    <DashboardLayout>
-      <div className="h-[60vh] flex items-center justify-center">
-        <Loader2 size={18} className="text-slate-400 animate-spin" />
-      </div>
-    </DashboardLayout>
-  );
-
-  if (user?.role !== 'SUPER_ADMIN') return (
-    <DashboardLayout>
-      <div className="h-[60vh] flex flex-col items-center justify-center gap-3 text-center px-6">
-        <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">
-          <Lock size={15} className="text-red-500" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-800">Access Restricted</p>
-          <p className="text-xs text-slate-400 mt-1 max-w-xs">Only Super Admins can modify organisation settings.</p>
-        </div>
-      </div>
-    </DashboardLayout>
-  );
-
-  const workDur = formatMinutes(settings.workMinutesPerDay);
-  const breakDur = formatMinutes(settings.breakMinutesAllocated);
+  }
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="min-h-screen bg-slate-50">
+        {/* ── Page Header */}
+        <div className="bg-white border-b border-slate-100 px-6 lg:px-8 pt-6 pb-0">
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Wrench size={13} className="text-slate-400" />
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                {isSuperAdmin ? 'Admin · Company Setup' : 'Admin · Department Setup'}
+              </p>
+            </div>
+            <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">
+              {isSuperAdmin ? 'Company Setup' : 'Department Setup'}
+            </h1>
+            <p className="text-sm text-slate-400 mt-0.5">
+              {isSuperAdmin
+                ? 'Company-wide defaults and department-specific overrides, separated by scope'
+                : 'Shift rules, holidays and leave allowances for the departments you manage'}
+            </p>
+          </div>
 
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Admin · Settings</p>
-            <h1 className="text-xl sm:text-2xl font-semibold text-slate-800 tracking-tight">Organisation Settings</h1>
-            <p className="text-sm text-slate-400 mt-0.5">Configure shift rules and company profile</p>
+          {/* ── Tab Bar */}
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-all -mb-px ${
+                  activeTab === tab.id
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 size={16} className="text-slate-400 animate-spin" />
-          </div>
-        ) : (
-          <div className="max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-
-            {/* ── Company Profile */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Building2 size={13} className="text-slate-400" />
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Company Profile</p>
-              </div>
-
-              <div className="bg-white border border-slate-100 rounded-xl shadow-sm">
-                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-50">
-                  <Building2 size={12} className="text-slate-400" />
-                  <h3 className="text-sm font-semibold text-slate-700">Organisation Details</h3>
+        {/* ── Tab Content */}
+        <div className="p-6 lg:p-8">
+          <Suspense fallback={<TabPanelLoader />}>
+            {activeTab === 'general' && user?.role === 'SUPER_ADMIN' && <GeneralPanel />}
+            {activeTab === 'general' && user?.role !== 'SUPER_ADMIN' && (
+              <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+                  <Lock size={16} className="text-red-500" />
                 </div>
-                <div className="px-5 py-4 space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-slate-600">Company Name</label>
-                    <input
-                      type="text"
-                      value={profile.name}
-                      onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                      placeholder="e.g. Acme Corp"
-                      className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                    />
-                  </div>
-
-                  {/* Company Logo */}
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-slate-600">Company Logo</label>
-                    <div className="flex items-center gap-3">
-                      <div className="w-14 h-14 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {profile.logo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={profile.logo} alt="Company logo" className="w-full h-full object-contain" />
-                        ) : (
-                          <Building2 size={18} className="text-slate-300" />
-                        )}
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors">
-                            Upload Logo
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleLogoChange}
-                              className="hidden"
-                            />
-                          </label>
-                          {profile.logo && (
-                            <button
-                              type="button"
-                              onClick={handleRemoveLogo}
-                              className="text-[11px] font-bold btn-danger-ghost px-2 py-1.5 rounded-lg"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400">
-                          PNG recommended for a crisp look with a transparent background. Other formats are allowed too — max {MAX_LOGO_SIZE_MB}MB.
-                        </p>
-                        {logoError && <p className="text-[10px] text-red-500 font-medium">{logoError}</p>}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-slate-600">Timezone</label>
-                    <div className="relative">
-                      <Globe size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <select
-                        value={profile.timezone}
-                        onChange={(e) => setProfile({ ...profile, timezone: e.target.value })}
-                        className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 pl-8 pr-7 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                      >
-                        <option value="Asia/Karachi">Asia/Karachi (PKT)</option>
-                        <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-                        <option value="Europe/London">Europe/London (GMT)</option>
-                        <option value="America/New_York">America/New_York (EST)</option>
-                        <option value="UTC">UTC</option>
-                      </select>
-                      <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    </div>
-                    <p className="text-[10px] text-slate-400">Determines check-in date boundary and daily reset.</p>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-50 space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck size={12} className="text-blue-500" />
-                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-tight">Geofence (Office Parameter)</h4>
-                      </div>
-                      <button
-                        onClick={getCurrentLocation}
-                        disabled={gettingLocation}
-                        className="text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
-                      >
-                        {gettingLocation ? 'Locating...' : 'Pin My Location'}
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Latitude</label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={profile.officeLat}
-                          onChange={(e) => setProfile({ ...profile, officeLat: parseFloat(e.target.value) })}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Longitude</label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={profile.officeLng}
-                          onChange={(e) => setProfile({ ...profile, officeLng: parseFloat(e.target.value) })}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Alert Radius (Meters)</label>
-                      <div className="flex items-center gap-4">
-                        <input
-                          type="range"
-                          min="10"
-                          max="500"
-                          step="10"
-                          value={profile.officeRadius}
-                          onChange={(e) => setProfile({ ...profile, officeRadius: parseInt(e.target.value) })}
-                          className="flex-1 accent-blue-600 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer"
-                        />
-                        <div className="w-16 shrink-0 bg-white border border-slate-200 rounded px-2 py-1 text-center">
-                          <span className="text-xs font-bold text-slate-700">{profile.officeRadius}m</span>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-slate-400">HR Admins will be notified if a check-in occurs outside this radius.</p>
-                    </div>
-                  </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Access Restricted</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                    Only Super Admins can modify organisation-level settings.
+                  </p>
                 </div>
               </div>
-
-              <button
-                onClick={handleSaveProfile}
-                disabled={savingProfile}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
-              >
-                {savingProfile ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                Save Company Profile
-              </button>
-            </div>
-
-            {/* ── Shift & Attendance Rules */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Timer size={13} className="text-slate-400" />
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Shift & Attendance</p>
-              </div>
-
-              <div className="bg-white border border-slate-100 rounded-xl shadow-sm">
-                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-50">
-                  <Clock size={12} className="text-slate-400" />
-                  <h3 className="text-sm font-semibold text-slate-700">Shift Rules</h3>
-                </div>
-                <div className="px-5 py-4 space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-slate-600">Expected Check-in Time</label>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={localCheckin.hour}
-                        onChange={(e) => setLocalCheckin({ ...localCheckin, hour: parseInt(e.target.value) })}
-                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                      >
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                          <option key={h} value={h}>{h}</option>
-                        ))}
-                      </select>
-                      <span className="text-slate-400 font-medium">:</span>
-                      <select
-                        value={localCheckin.minute}
-                        onChange={(e) => setLocalCheckin({ ...localCheckin, minute: parseInt(e.target.value) })}
-                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                      >
-                        {[0, 15, 30, 45].map((m) => (
-                          <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={localCheckin.period}
-                        onChange={(e) => setLocalCheckin({ ...localCheckin, period: e.target.value as 'AM' | 'PM' })}
-                        className="flex-1 bg-white border border-slate-200 rounded-lg py-2.5 px-2 text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                      >
-                        <option value="AM">AM</option>
-                        <option value="PM">PM</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <NumInput
-                      label="Grace Period (min)"
-                      value={settings.gracePeriodMinutes}
-                      onChange={(v) => setSettings({ ...settings, gracePeriodMinutes: v })}
-                    />
-                    <NumInput
-                      label="Work Duration (min)"
-                      value={settings.workMinutesPerDay}
-                      onChange={(v) => setSettings({ ...settings, workMinutesPerDay: v })}
-                    />
-                    <NumInput
-                      label="Break Duration (min)"
-                      value={settings.breakMinutesAllocated}
-                      onChange={(v) => setSettings({ ...settings, breakMinutesAllocated: v })}
-                    />
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-50 grid grid-cols-2 gap-4 text-center">
-                    <div>
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Work Day</p>
-                      <p className="text-sm font-semibold text-slate-700 mt-0.5">{workDur.h}h {workDur.m}m</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Break Time</p>
-                      <p className="text-sm font-semibold text-slate-700 mt-0.5">{breakDur.h}h {breakDur.m}m</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={handleSaveShift}
-                disabled={savingShift}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
-              >
-                {savingShift ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                Save Shift Rules
-              </button>
-            </div>
-
-          </div>
-        )}
+            )}
+            {activeTab === 'departments' && <DepartmentConfigPanel embedded />}
+            {activeTab === 'shifts' && isSuperAdmin && <ShiftsPanel />}
+            {activeTab === 'holidays' && isSuperAdmin && <HolidaysPanel />}
+          </Suspense>
+        </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function CompanySetupPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-50">
+          <Loader2 size={18} className="animate-spin text-slate-400" />
+        </div>
+      }
+    >
+      <CompanySetupContent />
+    </Suspense>
   );
 }

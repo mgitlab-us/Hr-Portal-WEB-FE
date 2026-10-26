@@ -1,10 +1,10 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import ProfileSecurityModal from '@/components/auth/ProfileSecurityModal';
 
 const MENU_ITEM =
   'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-ink transition-colors hover:bg-[#F1F5FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40';
@@ -40,6 +40,7 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const [open, setOpen] = React.useState(false);
+  const [profileModalOpen, setProfileModalOpen] = React.useState(false);
   const dark = variant === 'dark';
   const auto = variant === 'auto';
 
@@ -71,70 +72,87 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
   };
 
   return (
-    <div className="relative z-50">
-      {open && <div className="fixed inset-0 z-40" onClick={close} aria-hidden="true" />}
+    <>
+      <div className="relative z-50">
+        {open && <div className="fixed inset-0 z-40" onClick={close} aria-hidden="true" />}
 
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Account menu"
-        className={triggerClass}
-      >
-        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#2563EB] text-xs font-bold text-white">
-          {getInitials(user?.name)}
-        </span>
-        <span className="hidden min-w-0 flex-col text-left md:flex">
-          <span className={`max-w-[140px] truncate text-[13px] font-semibold leading-tight ${nameColor}`}>
-            {user?.name || 'Administrator'}
-          </span>
-          <span className={`max-w-[140px] truncate text-[11px] leading-tight ${roleColor}`}>
-            {formatRole(user?.role)}
-          </span>
-        </span>
-        <ChevronDown size={15} className={`flex-shrink-0 ${chevronColor}`} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-line bg-white shadow-[0_12px_40px_rgba(15,27,77,0.14)]"
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="Account menu"
+          className={triggerClass}
         >
-          <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#1D4ED8] text-xs font-bold text-white">
-              {getInitials(user?.name)}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold leading-tight text-ink">
-                {user?.name || 'Administrator'}
-              </p>
-              <p className="truncate text-xs text-ink-soft">{formatRole(user?.role)}</p>
-            </div>
-          </div>
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#2563EB] text-xs font-bold text-white">
+            {getInitials(user?.name)}
+          </span>
+          <span className="hidden min-w-0 flex-col text-left md:flex">
+            <span className={`max-w-[140px] truncate text-[13px] font-semibold leading-tight ${nameColor}`}>
+              {user?.name || 'Administrator'}
+            </span>
+            <span className={`max-w-[140px] truncate text-[11px] leading-tight ${roleColor}`}>
+              {formatRole(user?.role)}
+            </span>
+          </span>
+          <ChevronDown size={15} className={`flex-shrink-0 ${chevronColor}`} />
+        </button>
 
-          <div className="space-y-0.5 p-1.5">
-            {/* TODO: point Profile at a dedicated profile page once one exists */}
-            <Link href="/dashboard/settings" onClick={close} className={MENU_ITEM} role="menuitem">
-              <User size={16} className="text-ink-soft" />
-              Profile
-            </Link>
-            <Link href="/dashboard/settings" onClick={close} className={MENU_ITEM} role="menuitem">
-              <Settings size={16} className="text-ink-soft" />
-              Settings
-            </Link>
-            <button
-              type="button"
-              onClick={handleLogout}
-              role="menuitem"
-              className="flex w-full items-center gap-3 rounded-lg bg-rose-50 px-3 py-2.5 text-left text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/50"
-            >
-              <LogOut size={16} />
-              Sign Out
-            </button>
+        {open && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-line bg-white shadow-[0_12px_40px_rgba(15,27,77,0.14)]"
+          >
+            <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#1D4ED8] text-xs font-bold text-white">
+                {getInitials(user?.name)}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold leading-tight text-ink">
+                  {user?.name || 'Administrator'}
+                </p>
+                <p className="truncate text-xs text-ink-soft">{formatRole(user?.role)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-0.5 p-1.5">
+              <button
+                type="button"
+                onClick={() => { close(); setProfileModalOpen(true); }}
+                className={MENU_ITEM}
+                role="menuitem"
+              >
+                <User size={16} className="text-ink-soft" />
+                My Profile &amp; Security
+              </button>
+              <button
+                type="button"
+                onClick={() => { close(); router.push('/dashboard/settings'); }}
+                className={MENU_ITEM}
+                role="menuitem"
+              >
+                <Settings size={16} className="text-ink-soft" />
+                Company Setup
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                role="menuitem"
+                className="flex w-full items-center gap-3 rounded-lg bg-rose-50 px-3 py-2.5 text-left text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/50"
+              >
+                <LogOut size={16} />
+                Sign Out
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+
+      {/* Profile & Security modal — rendered outside the dropdown so it persists after dropdown closes */}
+      <ProfileSecurityModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+      />
+    </>
   );
 }

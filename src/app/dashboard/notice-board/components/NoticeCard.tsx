@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Pencil, Trash2, Users, Building2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { formatDateTimeDMY } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
 import { NOTICE_TYPE_META, type Notice } from '../types';
 
@@ -24,13 +25,7 @@ export default function NoticeCard({
   const isLong = notice.content.length > 220;
   const body = expanded || !isLong ? notice.content : `${notice.content.slice(0, 220).trimEnd()}…`;
 
-  const formattedDate = new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(notice.createdAt));
+  const formattedDate = formatDateTimeDMY(notice.createdAt);
 
   return (
     <article

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
+import { formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import HeaderActions, { type NotificationItem } from '@/components/layout/HeaderActions';
 import StatsDrilldownDialog, { type DrilldownMetric } from '@/components/dashboard/StatsDrilldownDialog';
@@ -39,7 +40,7 @@ const STAT_STYLES = {
 
 type StatStyle = keyof typeof STAT_STYLES;
 
-const CARD = 'rounded-[20px] border border-line bg-white shadow-[0_4px_24px_rgba(37,99,235,0.05)]';
+const CARD = 'rounded-xl border border-line bg-white shadow-2xs';
 
 // ── Stat card
 function StatCard({
@@ -68,7 +69,7 @@ function StatCard({
       className="w-full cursor-pointer rounded-xl text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 hover:ring-1 hover:ring-blue-200"
     >
       <div
-        className="rounded-[20px] border p-5 shadow-[0_4px_24px_rgba(37,99,235,0.05)]"
+        className="rounded-xl border p-3.5 shadow-2xs transition-all hover:shadow-xs"
         style={{
           background: `linear-gradient(135deg, ${s.wash} 0%, #FFFFFF 100%)`,
           borderColor: s.border,
@@ -76,17 +77,17 @@ function StatCard({
       >
         <div className="flex items-start justify-between">
           <div
-            className="flex h-[50px] w-[50px] items-center justify-center rounded-full"
+            className="flex h-9 w-9 items-center justify-center rounded-lg"
             style={{ backgroundColor: s.circle }}
           >
-            <Icon size={22} style={{ color: s.icon }} />
+            <Icon size={17} style={{ color: s.icon }} />
           </div>
-          <TrendingUp size={18} style={{ color: s.icon }} aria-hidden="true" />
+          <TrendingUp size={14} style={{ color: s.icon }} aria-hidden="true" />
         </div>
-        <div className="mt-5">
-          <p className="text-[13px] font-bold uppercase tracking-wide text-ink-soft">{label}</p>
-          <p className="mt-1.5 text-[30px] font-extrabold leading-none tracking-tight text-ink">{value}</p>
-          <p className="mt-3 text-sm font-medium text-ink-soft" style={subColor ? { color: subColor } : undefined}>
+        <div className="mt-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">{label}</p>
+          <p className="mt-1 text-2xl font-bold leading-none tracking-tight text-ink">{value}</p>
+          <p className="mt-1.5 text-xs font-medium text-ink-soft" style={subColor ? { color: subColor } : undefined}>
             {sub}
           </p>
         </div>
@@ -98,7 +99,7 @@ function StatCard({
 // ── Pulse status badge — green on time, yellow late, red absent/missing
 function StatusBadge({ action }: { action: string }) {
   const lower = action?.toLowerCase() || '';
-  const base = 'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold';
+  const base = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold';
 
   if (lower.includes('late'))
     return (
@@ -143,8 +144,8 @@ type PulseItem = {
 // ── Circular attendance gauge with the percentage centred inside
 function AttendanceRing({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, percent));
-  const size = 112;
-  const stroke = 10;
+  const size = 84;
+  const stroke = 7;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - clamped / 100);
@@ -167,7 +168,7 @@ function AttendanceRing({ percent }: { percent: number }) {
           style={{ transition: 'stroke-dashoffset 700ms ease' }}
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[22px] font-extrabold text-ink">
+      <span className="absolute inset-0 flex items-center justify-center text-base font-bold text-ink">
         {Math.round(clamped)}%
       </span>
     </div>
@@ -177,8 +178,8 @@ function AttendanceRing({ percent }: { percent: number }) {
 // ── Empty state for the live feed
 function EmptyActivity() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
-      <div className="relative mb-6 flex h-[100px] w-[100px] items-center justify-center">
+    <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 text-center">
+      <div className="relative mb-3 flex h-16 w-16 items-center justify-center">
         <div className="absolute inset-0 rounded-full bg-gradient-to-b from-[#EEF4FF] to-[#E3EDFF]" />
         <svg
           aria-hidden="true"
@@ -197,10 +198,10 @@ function EmptyActivity() {
           />
           <circle cx="50" cy="3" r="3.5" fill="#BFD3FF" />
         </svg>
-        <FileText size={32} className="relative text-[#2563EB]" />
+        <FileText size={22} className="relative text-[#2563EB]" />
       </div>
-      <p className="text-xl font-bold text-ink">No recent activity</p>
-      <p className="mt-2 max-w-xs text-[15px] text-ink-soft">
+      <p className="text-sm font-bold text-ink">No recent activity</p>
+      <p className="mt-1 max-w-xs text-xs text-ink-soft">
         When staff check in, their activity will appear here.
       </p>
     </div>
@@ -233,6 +234,7 @@ export default function DashboardOverview() {
     attendanceChange: null as number | null,
   });
   const [pulse, setPulse] = useState<PulseItem[]>([]);
+  const [isOverviewLoading, setIsOverviewLoading] = useState(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [drilldownMetric, setDrilldownMetric] = useState<DrilldownMetric | null>(null);
 
@@ -259,6 +261,7 @@ export default function DashboardOverview() {
     if (!user?.companyId || user?.mustChangePassword) return;
 
     const fetchDashboard = async () => {
+      setIsOverviewLoading(true);
       try {
         const [statsRes, pulseRes] = await Promise.all([
           api.get('/attendance/stats/company'),
@@ -268,6 +271,8 @@ export default function DashboardOverview() {
         setPulse(pulseRes.data);
       } catch (err) {
         console.error('Overview data fetch failed:', err);
+      } finally {
+        setIsOverviewLoading(false);
       }
     };
 
@@ -311,6 +316,11 @@ export default function DashboardOverview() {
       scheduleDashboardRefresh();
     });
 
+    socket.on('stats:update', (data) => {
+      if (data.companyId !== user.companyId) return;
+      scheduleDashboardRefresh();
+    });
+
     socket.on('notification:geofence', (data) => {
       addNotification({
         id: data.id || makeId('geofence'),
@@ -350,14 +360,7 @@ export default function DashboardOverview() {
     };
   }, [user]);
 
-  const [today] = useState(() =>
-    new Date().toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    })
-  );
+  const [today] = useState(() => formatWeekdayDateDMY(new Date()));
 
   const attendanceRounded = Math.round(stats.overallAttendance);
 
@@ -371,75 +374,72 @@ export default function DashboardOverview() {
         />
       }
     >
-      <div className="min-h-screen space-y-6 bg-canvas px-5 py-6 sm:px-7 lg:py-7">
+      <div className="min-h-screen space-y-5 bg-canvas px-4 py-5 sm:px-6 lg:py-6">
         {/* ── Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="mb-1.5 text-[13px] font-bold uppercase tracking-[0.12em] text-[#5B6FA8]">
-              Admin • Command Center
-            </p>
-            <h1 className="text-[32px] font-extrabold leading-tight tracking-tight text-ink">Dashboard</h1>
-            <p className="mt-1 text-base text-ink-soft">{today}</p>
+            <h1 className="text-2xl font-bold leading-tight tracking-tight text-ink">Dashboard</h1>
+            <p className="mt-0.5 text-xs text-ink-soft">{today}</p>
           </div>
         </div>
 
         {/* ── Stat cards */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <StatCard
             label="Total Staff"
-            value={stats.total}
+            value={isOverviewLoading ? '—' : stats.total}
             icon={Users}
             style="blue"
-            sub="Active personnel"
+            sub={isOverviewLoading ? 'Loading...' : 'Active personnel'}
             onClick={() => setDrilldownMetric('total')}
           />
           <StatCard
             label="Present Today"
-            value={stats.present}
+            value={isOverviewLoading ? '—' : stats.present}
             icon={CalendarCheck}
             style="green"
-            sub={`${attendanceRounded}% attendance`}
+            sub={isOverviewLoading ? 'Loading...' : `${attendanceRounded}% attendance`}
             onClick={() => setDrilldownMetric('present')}
           />
           <StatCard
             label="On Leave"
-            value={stats.onLeave}
+            value={isOverviewLoading ? '—' : stats.onLeave}
             icon={Plane}
             style="purple"
-            sub="Approved leave"
+            sub={isOverviewLoading ? 'Loading...' : 'Approved leave'}
             subColor="#6D4AFF"
             onClick={() => setDrilldownMetric('on-leave')}
           />
           <StatCard
             label="Late Arrivals"
-            value={stats.late}
+            value={isOverviewLoading ? '—' : stats.late}
             icon={Clock}
             style="amber"
-            sub="Flagged today"
+            sub={isOverviewLoading ? 'Loading...' : 'Flagged today'}
             onClick={() => setDrilldownMetric('late')}
           />
           <StatCard
             label="Absent"
-            value={stats.absent}
+            value={isOverviewLoading ? '—' : stats.absent}
             icon={UserX}
             style="rose"
-            sub="Not checked in"
+            sub={isOverviewLoading ? 'Loading...' : 'Not checked in'}
             onClick={() => setDrilldownMetric('absent')}
           />
         </div>
 
         {/* ── Main grid */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 gap-4.5 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
           {/* Live activity */}
-          <section className={`${CARD} flex min-h-[445px] flex-col overflow-hidden`}>
-            <div className="flex items-center justify-between border-b border-line px-6 py-5">
-              <h2 className="text-lg font-bold text-ink">Staff Activity</h2>
-              <div className="flex items-center gap-2">
+          <section className={`${CARD} flex min-h-[380px] flex-col overflow-hidden`}>
+            <div className="flex items-center justify-between border-b border-line px-4.5 py-3">
+              <h2 className="text-sm font-bold text-ink">Staff Activity</h2>
+              <div className="flex items-center gap-1.5">
                 <span
-                  className="h-2 w-2 rounded-full motion-safe:animate-pulse"
+                  className="h-1.5 w-1.5 rounded-full motion-safe:animate-pulse"
                   style={{ backgroundColor: '#12B76A' }}
                 />
-                <span className="text-[13px] font-bold uppercase tracking-wider text-ink-soft">Live</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">Live</span>
               </div>
             </div>
 
@@ -450,21 +450,21 @@ export default function DashboardOverview() {
                   return (
                     <div
                       key={i}
-                      className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-[#F7F9FF]"
+                      className="flex items-center gap-3 px-4.5 py-2.5 transition-colors hover:bg-[#F7F9FF]"
                     >
                       <div
-                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-2xs"
                         style={{ backgroundColor: tone.accent }}
                       >
                         {item.name?.charAt(0)?.toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-ink">{item.name}</p>
-                        <p className="truncate text-xs text-ink-soft">{item.action}</p>
+                        <p className="truncate text-xs font-semibold text-ink">{item.name}</p>
+                        <p className="truncate text-[11px] text-ink-soft">{item.action}</p>
                       </div>
-                      <div className="flex flex-shrink-0 items-center gap-3">
+                      <div className="flex flex-shrink-0 items-center gap-2.5">
                         <StatusBadge action={item.action} />
-                        <span className="w-16 text-right text-xs font-medium tabular-nums text-ink-faint">
+                        <span className="w-14 text-right text-[11px] font-medium tabular-nums text-ink-faint">
                           {item.time}
                         </span>
                       </div>
@@ -478,43 +478,43 @@ export default function DashboardOverview() {
           </section>
 
           {/* Right column */}
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4">
             {/* Attendance rate */}
-            <section className={`${CARD} p-6`}>
+            <section className={`${CARD} p-4.5`}>
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-ink-soft">Monthly Pulse</p>
-                  <h2 className="mt-1 text-lg font-bold text-ink">Attendance Rate</h2>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">Monthly Pulse</p>
+                  <h2 className="mt-0.5 text-sm font-bold text-ink">Attendance Rate</h2>
                 </div>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E8F0FF] text-[#2563EB]">
-                  <TrendingUp size={16} aria-hidden="true" />
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E8F0FF] text-[#2563EB]">
+                  <TrendingUp size={14} aria-hidden="true" />
                 </div>
               </div>
 
-              <div className="mt-5 flex items-center gap-5">
+              <div className="mt-3.5 flex items-center gap-4">
                 <AttendanceRing percent={stats.overallAttendance} />
-                <div className="flex h-28 min-w-0 flex-1 flex-col justify-center border-b border-line pb-2">
-                  <span className="text-2xl font-extrabold leading-none tracking-tight text-ink">
+                <div className="flex h-20 min-w-0 flex-1 flex-col justify-center border-b border-line pb-1">
+                  <span className="text-xl font-bold leading-none tracking-tight text-ink">
                     {attendanceRounded}%
                   </span>
-                  <p className="mt-2 text-sm text-ink-soft">On-time arrivals this month</p>
+                  <p className="mt-1 text-xs text-ink-soft">On-time arrivals this month</p>
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 text-sm font-medium">
+              <div className="mt-3 flex items-center gap-1.5 text-xs font-medium">
                 {stats.attendanceChange === null ? (
                   <>
-                    <TrendingUp size={16} className="text-[#2563EB]" aria-hidden="true" />
+                    <TrendingUp size={14} className="text-[#2563EB]" aria-hidden="true" />
                     <span className="text-ink-soft">Monitoring on-time trends...</span>
                   </>
                 ) : stats.attendanceChange >= 0 ? (
                   <>
-                    <TrendingUp size={16} style={{ color: TONES.green.accent }} aria-hidden="true" />
+                    <TrendingUp size={14} style={{ color: TONES.green.accent }} aria-hidden="true" />
                     <span style={{ color: TONES.green.icon }}>+{stats.attendanceChange}% vs last month</span>
                   </>
                 ) : (
                   <>
-                    <TrendingUp size={16} className="rotate-180" style={{ color: TONES.red.accent }} aria-hidden="true" />
+                    <TrendingUp size={14} className="rotate-180" style={{ color: TONES.red.accent }} aria-hidden="true" />
                     <span style={{ color: TONES.red.icon }}>{stats.attendanceChange}% vs last month</span>
                   </>
                 )}
@@ -522,20 +522,20 @@ export default function DashboardOverview() {
             </section>
 
             {/* Avg work hours */}
-            <section className={`${CARD} flex-1 p-6`}>
+            <section className={`${CARD} flex-1 p-4.5`}>
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-ink-soft">Productivity</p>
-                  <h2 className="mt-1 text-lg font-bold text-ink">Avg. Work Hours</h2>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">Productivity</p>
+                  <h2 className="mt-0.5 text-sm font-bold text-ink">Avg. Work Hours</h2>
                 </div>
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EDE8FF] text-[#6D4AFF]">
-                  <Clock size={16} aria-hidden="true" />
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#EDE8FF] text-[#6D4AFF]">
+                  <Clock size={14} aria-hidden="true" />
                 </div>
               </div>
-              <p className="mt-4 text-[34px] font-extrabold leading-none tracking-tight text-ink">
+              <p className="mt-3 text-2xl font-bold leading-none tracking-tight text-ink">
                 {formatWorkHours(stats.avgWorkHours)}
               </p>
-              <p className="mt-3 text-sm text-ink-soft">Daily team average</p>
+              <p className="mt-1 text-xs text-ink-soft">Daily team average</p>
             </section>
           </div>
         </div>

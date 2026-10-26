@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Clock, Calendar, Search, Download, Loader2, CheckCircle2, Timer, UserMinus, X, FileText, MapPin, ArrowRight, } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatWeekdayDateDMY, todayDateKey } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import FilterChips from '@/components/filters/FilterChips';
 import { useToast } from '@/components/ui/toast';
@@ -137,7 +138,7 @@ export default function AttendanceLogsPage() {
   const { toast } = useToast();
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayDateKey());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
@@ -223,9 +224,7 @@ export default function AttendanceLogsPage() {
   const activeStatusLabel =
     statusOptions.find((option) => option.value === statusFilter)?.label ?? 'All';
 
-  const displayDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-  });
+  const displayDate = formatWeekdayDateDMY(date);
 
   return (
     <DashboardLayout>
@@ -235,9 +234,6 @@ export default function AttendanceLogsPage() {
         {/* ── Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-              Admin · Attendance
-            </p>
             <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">
               Attendance Logs
             </h1>

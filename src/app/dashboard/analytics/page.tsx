@@ -13,6 +13,7 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import { api } from '@/lib/api';
+import { formatDateDMY, todayDateKey } from '@/lib/datetime';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import FilterChips from '@/components/filters/FilterChips';
@@ -81,7 +82,7 @@ function classifyStatus(status: string): Bucket {
 }
 
 function toISODate(d: Date) {
-  return d.toISOString().split('T')[0];
+  return todayDateKey(d);
 }
 
 function getDateList(from: string, to: string): string[] {
@@ -98,7 +99,7 @@ function getDateList(from: string, to: string): string[] {
 }
 
 function formatShortDate(iso: string) {
-  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return formatDateDMY(iso);
 }
 
 function minutesToClock(mins: number) {
