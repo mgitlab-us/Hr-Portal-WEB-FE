@@ -1,9 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Calendar, Plus, X, Loader2, Trash2, Check, ChevronDown, Info, AlertCircle, } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Calendar, Plus, X, Loader2, Trash2, Info, Building2, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatLongDateDMY } from '@/lib/datetime';
+import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/components/ui/toast';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -20,14 +25,22 @@ interface Holiday {
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function HolidaysPage() {
+  const { toast } = useToast();
+  const { user } = useAuthStore();
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [weekends, setWeekends] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Holiday | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [newHoliday, setNewHoliday] = useState({ name: '', date: '' });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (user?.role !== 'SUPER_ADMIN') {
+      setLoading(false);
+      return;
+    }
     try {
       const [hRes, cRes] = await Promise.all([
         api.get('/holidays'),
@@ -41,11 +54,12 @@ export default function HolidaysPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.role]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchData();
+  }, [fetchData]);
 
   const handleToggleWeekend = async (dayIndex: number) => {
     const updated = weekends.includes(dayIndex)
@@ -58,7 +72,7 @@ export default function HolidaysPage() {
     try {
       await api.put('/holidays/weekends', { weekends: updated });
     } catch {
-      alert('Failed to update weekends');
+      toast.error('Failed to update the weekend settings.');
       fetchData(); // Rollback
     }
   };
@@ -73,22 +87,50 @@ export default function HolidaysPage() {
       setIsAddModalOpen(false);
       setNewHoliday({ name: '', date: '' });
       fetchData();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to add holiday');
+      toast.success('Holiday added.');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e?.response?.data?.message || 'Failed to add holiday');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeleteHoliday = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this holiday?')) return;
+  const handleDeleteHoliday = (holiday: Holiday) => setDeleteTarget(holiday);
+
+  const confirmDeleteHoliday = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.delete(`/holidays/${id}`);
+      await api.delete(`/holidays/${deleteTarget.id}`);
       fetchData();
+      toast.success('Holiday deleted.');
+      setDeleteTarget(null);
     } catch {
-      alert('Failed to delete holiday');
+      toast.error('Failed to delete holiday');
+    } finally {
+      setDeleting(false);
     }
   };
+
+  if (user && user.role !== 'SUPER_ADMIN') {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50">
+            <Lock size={16} className="text-red-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Access Restricted</p>
+            <p className="mt-1 max-w-xs text-xs text-slate-400">
+              Company holidays are managed by the Super Admin. Add department holidays from
+              Department Setup instead.
+            </p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -103,19 +145,28 @@ export default function HolidaysPage() {
             <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Holidays & Weekends</h1>
             <p className="text-sm text-slate-400 mt-0.5">Define non-working days for your team</p>
           </div>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-          >
-            <Plus size={14} />
-            Add Holiday
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/dashboard/settings/departments"
+              className="inline-flex items-center gap-2 px-4 py-2.5 btn-secondary text-sm font-medium rounded-lg"
+            >
+              <Building2 size={14} />
+              Department Setup
+            </Link>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
+            >
+              <Plus size={14} />
+              Add Holiday
+            </button>
+          </div>
         </div>
 
         {/* ── Weekends Section */}
         <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
               <Calendar size={18} />
             </div>
             <div>
@@ -134,8 +185,8 @@ export default function HolidaysPage() {
                   className={cn(
                     "px-5 py-2.5 rounded-xl text-sm font-medium transition-all border",
                     active
-                      ? "bg-slate-800 border-slate-800 text-white shadow-md shadow-slate-200"
-                      : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                      ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-200"
+                      : "border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100"
                   )}
                 >
                   {day}
@@ -147,7 +198,7 @@ export default function HolidaysPage() {
           <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-3">
             <Info size={14} className="text-slate-400 mt-0.5" />
             <p className="text-xs text-slate-500 leading-relaxed">
-              Attendance tracking and "Absent" marking will be automatically skipped on these days.
+              Attendance tracking and &ldquo;Absent&rdquo; marking will be automatically skipped on these days.
               The Absentee Engine uses these settings to calculate daily reports.
             </p>
           </div>
@@ -185,17 +236,13 @@ export default function HolidaysPage() {
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-sm text-slate-500 tabular-nums">
-                            {new Date(h.date).toLocaleDateString('en-GB', {
-                              day: '2-digit',
-                              month: 'long',
-                              year: 'numeric'
-                            })}
+                            {formatLongDateDMY(h.date)}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <button
-                            onClick={() => handleDeleteHoliday(h.id)}
-                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            onClick={() => handleDeleteHoliday(h)}
+                            className="p-2 btn-danger-ghost rounded-lg"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -218,7 +265,7 @@ export default function HolidaysPage() {
               <h2 className="text-lg font-semibold text-slate-800">Add Holiday</h2>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
+                className="p-2 btn-ghost rounded-lg"
               >
                 <X size={18} />
               </button>
@@ -232,7 +279,7 @@ export default function HolidaysPage() {
                   value={newHoliday.name}
                   onChange={(e) => setNewHoliday(p => ({ ...p, name: e.target.value }))}
                   placeholder="e.g. Eid-ul-Adha"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-700 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none transition-all"
                 />
               </div>
 
@@ -243,7 +290,7 @@ export default function HolidaysPage() {
                   type="date"
                   value={newHoliday.date}
                   onChange={(e) => setNewHoliday(p => ({ ...p, date: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-700 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none transition-all"
                 />
               </div>
 
@@ -251,14 +298,14 @@ export default function HolidaysPage() {
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                  className="flex-1 px-4 py-3 text-sm font-semibold btn-ghost rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-[1.5] bg-slate-800 text-white px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-slate-200 disabled:opacity-60"
+                  className="flex-[1.5] btn-primary px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
                 >
                   {submitting && <Loader2 size={14} className="animate-spin" />}
                   Schedule Holiday
@@ -268,6 +315,22 @@ export default function HolidaysPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+        title="Remove this holiday?"
+        description={
+          deleteTarget
+            ? `“${deleteTarget.name}” will be removed from the holiday calendar.`
+            : 'This holiday will be removed from the holiday calendar.'
+        }
+        confirmLabel="Remove holiday"
+        loading={deleting}
+        onConfirm={confirmDeleteHoliday}
+      />
     </DashboardLayout>
   );
 }

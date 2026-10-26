@@ -3,10 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   Building2, Plus, X, Loader2, Trash2, Pencil, Users, UserCog, ChevronDown,
+  LayoutGrid, TableProperties, Settings2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { DepartmentOrgChart } from '@/components/departments/DepartmentOrgChart';
+import { useToast } from '@/components/ui/toast';
 import { useRouter } from 'next/navigation';
 
 interface Department {
@@ -23,8 +26,10 @@ interface AdminOption {
   email: string;
 }
 
+
 export default function DepartmentsPage() {
   const { user } = useAuthStore();
+  const { toast } = useToast();
   const router = useRouter();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [admins, setAdmins] = useState<AdminOption[]>([]);
@@ -33,6 +38,7 @@ export default function DepartmentsPage() {
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; dept?: Department } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
   const [form, setForm] = useState({ name: '', adminId: '' });
+  const [view, setView] = useState<'chart' | 'table'>('chart');
 
   useEffect(() => {
     if (user && user.role !== 'SUPER_ADMIN') {
@@ -48,11 +54,9 @@ export default function DepartmentsPage() {
       ]);
       setDepartments(deptRes.data);
       setAdmins(
-        empRes.data.filter((e: { role: string }) => e.role === 'ADMIN').map((e: AdminOption) => ({
-          id: e.id,
-          name: e.name,
-          email: e.email,
-        }))
+        (empRes.data as Array<{ id: string; name: string; email: string; role: string }>)
+          .filter((e) => e.role === 'ADMIN')
+          .map((e) => ({ id: e.id, name: e.name, email: e.email }))
       );
     } catch (err) {
       console.error('Failed to fetch departments:', err);
@@ -63,7 +67,8 @@ export default function DepartmentsPage() {
 
   useEffect(() => {
     if (user?.role === 'SUPER_ADMIN' && !user?.mustChangePassword) {
-      fetchData();
+      const init = async () => { await fetchData(); };
+      init();
     }
   }, [user]);
 
@@ -96,8 +101,10 @@ export default function DepartmentsPage() {
       }
       setModal(null);
       fetchData();
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Operation failed');
+      toast.success(modal?.mode === 'create' ? 'Department created.' : 'Department updated.');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e?.response?.data?.message || 'Operation failed');
     } finally {
       setSubmitting(false);
     }
@@ -110,8 +117,10 @@ export default function DepartmentsPage() {
       await api.delete(`/departments/${deleteTarget.id}`);
       setDeleteTarget(null);
       fetchData();
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to delete department');
+      toast.success('Department deleted.');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e?.response?.data?.message || 'Failed to delete department');
     } finally {
       setSubmitting(false);
     }
@@ -126,21 +135,50 @@ export default function DepartmentsPage() {
       <div className="p-6 lg:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-              Super Admin · Organisation
-            </p>
             <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Departments</h1>
             <p className="text-sm text-slate-400 mt-0.5">
               Create departments and assign HR admins to manage them
             </p>
           </div>
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-          >
-            <Plus size={14} />
-            Add Department
-          </button>
+          <div className="flex items-center flex-wrap gap-2">
+            {/* Chart / table view toggle */}
+            <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-lg">
+              <button
+                onClick={() => setView('chart')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  view === 'chart' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-blue-50 hover:text-blue-700'
+                }`}
+                aria-pressed={view === 'chart'}
+              >
+                <LayoutGrid size={13} />
+                Chart
+              </button>
+              <button
+                onClick={() => setView('table')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  view === 'table' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-blue-50 hover:text-blue-700'
+                }`}
+                aria-pressed={view === 'table'}
+              >
+                <TableProperties size={13} />
+                Table
+              </button>
+            </div>
+            <button
+              onClick={() => router.push('/dashboard/settings/departments')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 btn-secondary text-sm font-medium rounded-lg"
+            >
+              <Settings2 size={14} />
+              Department Setup
+            </button>
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
+            >
+              <Plus size={14} />
+              Add Department
+            </button>
+          </div>
         </div>
 
         <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
@@ -152,10 +190,18 @@ export default function DepartmentsPage() {
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Building2 size={28} className="mb-3 text-slate-300" />
               <p className="text-sm">No departments yet</p>
-              <button onClick={openCreate} className="mt-3 text-xs text-indigo-600 hover:underline">
+              <button onClick={openCreate} className="mt-3 text-xs font-semibold btn-ghost rounded-md">
                 Create your first department
               </button>
             </div>
+          ) : view === 'chart' ? (
+            <DepartmentOrgChart
+            companyName={user?.company?.name || 'Organisation'}
+              departments={departments}
+              onAddDepartment={openCreate}
+              onEditDepartment={openEdit}
+              onDeleteDepartment={setDeleteTarget}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -178,8 +224,8 @@ export default function DepartmentsPage() {
                     <tr key={dept.id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                            <Building2 size={14} className="text-indigo-500" />
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <Building2 size={14} className="text-blue-500" />
                           </div>
                           <p className="text-sm font-medium text-slate-700">{dept.name}</p>
                         </div>
@@ -209,13 +255,13 @@ export default function DepartmentsPage() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => openEdit(dept)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                            className="p-1.5 btn-ghost rounded-md"
                           >
                             <Pencil size={14} />
                           </button>
                           <button
                             onClick={() => setDeleteTarget(dept)}
-                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            className="p-1.5 btn-danger-ghost rounded-md"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -239,7 +285,7 @@ export default function DepartmentsPage() {
               </h2>
               <button
                 onClick={() => setModal(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md"
+                className="p-1.5 btn-ghost rounded-md"
               >
                 <X size={15} />
               </button>
@@ -252,7 +298,7 @@ export default function DepartmentsPage() {
                   value={form.name}
                   onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                   placeholder="e.g. Engineering"
-                  className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                  className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                 />
               </div>
               <div className="space-y-1.5">
@@ -261,7 +307,7 @@ export default function DepartmentsPage() {
                   <select
                     value={form.adminId}
                     onChange={(e) => setForm((p) => ({ ...p, adminId: e.target.value }))}
-                    className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                   >
                     <option value="">Unassigned</option>
                     {admins.map((a) => (
@@ -280,14 +326,14 @@ export default function DepartmentsPage() {
                 <button
                   type="button"
                   onClick={() => setModal(null)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-4 py-2 text-sm font-medium btn-ghost rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex items-center gap-2 px-5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg"
+                  className="inline-flex items-center gap-2 px-5 py-2 btn-primary text-sm font-medium rounded-lg"
                 >
                   {submitting && <Loader2 size={13} className="animate-spin" />}
                   {modal.mode === 'create' ? 'Create' : 'Save Changes'}
@@ -313,14 +359,14 @@ export default function DepartmentsPage() {
             <div className="flex border-t border-slate-100">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50 border-r border-slate-100"
+                className="flex-1 px-4 py-3 text-sm font-semibold btn-ghost border-r border-slate-100"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={submitting}
-                className="flex-1 px-4 py-3 text-sm font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60"
+                className="flex-1 px-4 py-3 text-sm font-bold btn-danger"
               >
                 Delete
               </button>

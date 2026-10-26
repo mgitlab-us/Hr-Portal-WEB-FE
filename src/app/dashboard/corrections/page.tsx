@@ -4,7 +4,9 @@ import {
   CheckCircle2, MessageSquare, ChevronRight, Loader2, Calendar, Check, X, ArrowRight,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatDayMonth, formatTime12h, formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { useToast } from '@/components/ui/toast';
 
 interface CorrectionRequest {
   id: string;
@@ -24,19 +26,11 @@ interface CorrectionRequest {
 
 const formatTo12h = (dateStr: string | null) => {
   if (!dateStr) return '--:--';
-  return new Date(dateStr).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return formatTime12h(dateStr);
 };
 
 const formatDate = (dateStr: string, short = false) =>
-  new Date(dateStr).toLocaleDateString('en-US',
-    short
-      ? { month: 'short', day: 'numeric' }
-      : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
-  );
+  short ? formatDayMonth(dateStr) : formatWeekdayDateDMY(dateStr);
 
 const AVATAR_COLORS = [
   '#6366F1', '#0D9E7A', '#F59E0B', '#E8405A', '#8B5CF6', '#2563EB',
@@ -63,24 +57,24 @@ function TimeBlock({
   return (
     <div
       className={`flex-1 rounded-lg px-3 py-2.5 ${isRequested
-        ? 'bg-indigo-50 border border-indigo-100'
+        ? 'bg-blue-50 border border-blue-100'
         : 'bg-slate-50 border border-slate-100'
         }`}
     >
-      <p className={`text-[9px] font-bold uppercase tracking-widest mb-2 ${isRequested ? 'text-indigo-400' : 'text-slate-400'}`}>
+      <p className={`text-[9px] font-bold uppercase tracking-widest mb-2 ${isRequested ? 'text-blue-400' : 'text-slate-400'}`}>
         {label}
       </p>
       <div className="flex items-center gap-2">
         <div>
-          <p className={`text-[8px] font-semibold uppercase mb-0.5 ${isRequested ? 'text-indigo-300' : 'text-slate-400'}`}>In</p>
-          <p className={`text-xs font-semibold tabular-nums whitespace-nowrap ${isRequested ? 'text-indigo-700' : 'text-slate-500'}`}>
+          <p className={`text-[8px] font-semibold uppercase mb-0.5 ${isRequested ? 'text-blue-300' : 'text-slate-400'}`}>In</p>
+          <p className={`text-xs font-semibold tabular-nums whitespace-nowrap ${isRequested ? 'text-blue-700' : 'text-slate-500'}`}>
             {formatTo12h(checkin)}
           </p>
         </div>
-        <ChevronRight size={10} className={isRequested ? 'text-indigo-200' : 'text-slate-300'} />
+        <ChevronRight size={10} className={isRequested ? 'text-blue-200' : 'text-slate-300'} />
         <div>
-          <p className={`text-[8px] font-semibold uppercase mb-0.5 ${isRequested ? 'text-indigo-300' : 'text-slate-400'}`}>Out</p>
-          <p className={`text-xs font-semibold tabular-nums whitespace-nowrap ${isRequested ? 'text-indigo-700' : 'text-slate-500'}`}>
+          <p className={`text-[8px] font-semibold uppercase mb-0.5 ${isRequested ? 'text-blue-300' : 'text-slate-400'}`}>Out</p>
+          <p className={`text-xs font-semibold tabular-nums whitespace-nowrap ${isRequested ? 'text-blue-700' : 'text-slate-500'}`}>
             {formatTo12h(checkout)}
           </p>
         </div>
@@ -153,7 +147,7 @@ function CorrectionCard({
             <button
               onClick={() => onReview(req.id, 'REJECTED')}
               disabled={isProcessing}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-lg hover:border-red-200 hover:text-red-600 hover:bg-red-50 transition-all disabled:opacity-50 whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold btn-danger-ghost border border-rose-200 bg-rose-50 rounded-lg whitespace-nowrap"
             >
               <X size={12} />
               <span className="hidden sm:inline">Reject</span>
@@ -161,7 +155,7 @@ function CorrectionCard({
             <button
               onClick={() => onReview(req.id, 'APPROVED')}
               disabled={isProcessing}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-all disabled:opacity-50 shadow-sm whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold btn-primary rounded-lg whitespace-nowrap"
             >
               {isProcessing
                 ? <Loader2 size={12} className="animate-spin" />
@@ -186,6 +180,7 @@ function CorrectionCard({
 }
 
 export default function CorrectionsPage() {
+  const { toast } = useToast();
   const [requests, setRequests] = useState<CorrectionRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -201,15 +196,19 @@ export default function CorrectionsPage() {
     }
   };
 
-  useEffect(() => { fetchRequests(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchRequests();
+  }, []);
 
   const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     setProcessingId(id);
     try {
       await api.put(`/corrections/${id}/review`, { status });
       setRequests((prev) => prev.filter((r) => r.id !== id));
+      toast.success(`Correction request ${status === 'APPROVED' ? 'approved' : 'rejected'}.`);
     } catch {
-      alert('Action failed. Ensure you have Super Admin privileges.');
+      toast.error('Action failed. Ensure you have Super Admin privileges.');
     } finally {
       setProcessingId(null);
     }
@@ -247,7 +246,7 @@ export default function CorrectionsPage() {
         {/* Body */}
         {loading ? (
           <div className="h-64 flex items-center justify-center">
-            <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+            <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
           </div>
         ) : requests.length === 0 ? (
           <div className="bg-white border border-slate-100 rounded-xl p-12 sm:p-16 flex flex-col items-center text-center gap-3">

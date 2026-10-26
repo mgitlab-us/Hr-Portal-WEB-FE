@@ -2,21 +2,34 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Briefcase, CreditCard, History, CheckCircle2, AlertCircle, Loader2, DollarSign, Building2, Landmark, Save } from 'lucide-react';
+import {
+  Mail, Phone, Calendar, Building2, Briefcase, Clock3,
+  CreditCard, History, CheckCircle2, AlertCircle, Loader2,
+  DollarSign, Landmark, Save, X, Pencil, ShieldCheck
+} from 'lucide-react';
 import { api } from '@/lib/api';
-import { format } from 'date-fns';
+import { formatLongDateDMY, formatMonthYear } from '@/lib/datetime';
+import DesignationSelect from '@/components/employees/DesignationSelect';
+import { useToast } from '@/components/ui/toast';
+import { useAuthStore } from '@/store/authStore';
 
 interface Employee {
   id: string;
   name: string;
   email: string;
+  role: 'EMPLOYEE' | 'ADMIN' | 'SUPER_ADMIN';
   isActive: boolean;
   createdAt: string;
+  departmentId?: string | null;
+  shiftProfileId?: string | null;
   profile?: {
     employeeCode: string;
     designation: string;
+    designationId?: string | null;
     department: string;
-    baseSalary?: string;
+    phone?: string;
+    joiningDate?: string;
+    baseSalary?: string | number;
     bankName?: string;
     accountNumber?: string;
   };
@@ -32,88 +45,177 @@ interface PaymentRecord {
   referenceId: string | null;
 }
 
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  employeeId: string | null;
+interface DepartmentOption {
+  id: string;
+  name: string;
 }
 
-export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId }: Props) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'salary' | 'attendance'>('overview');
+interface ShiftOption {
+  id: string;
+  name: string;
+}
+
+interface Props {
+  employeeId: string;
+  canManage: boolean;
+  onClose: () => void;
+  avatarColor: { bg: string; text: string };
+}
+
+const AVATAR_FALLBACK = { bg: '#ECEFFE', text: '#5B6EF5' };
+
+export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, avatarColor }: Props) {
+  const { toast } = useToast();
+  const isSuperAdmin = useAuthStore((state) => state.user?.role === 'SUPER_ADMIN');
+  const [activeTab, setActiveTab] = useState<'details' | 'salary' | 'attendance'>('details');
+  const [isEditing, setIsEditing] = useState(false);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [shifts, setShifts] = useState<ShiftOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
-  
-  // Local state for editing profile info
+
   const [editInfo, setEditInfo] = useState({
     baseSalary: '',
     bankName: '',
     accountNumber: '',
     designation: '',
-    department: ''
+    designationId: '',
+    phone: '',
+    joiningDate: '',
+    departmentId: '',
+    shiftProfileId: ''
   });
 
   const fetchData = async () => {
-    if (!employeeId) return;
     setLoading(true);
+    setIsEditing(false);
     try {
-      const [empRes, salaryRes] = await Promise.all([
+      const [empRes, salaryRes, deptsRes, shiftsRes] = await Promise.all([
         api.get(`/employees/${employeeId}`),
-        api.get(`/salary/${employeeId}/history`).catch(() => ({ data: [] }))
+        api.get(`/salary/${employeeId}/history`).catch(() => ({ data: [] })),
+        api.get('/departments').catch(() => ({ data: [] })),
+        api.get('/shifts').catch(() => ({ data: [] }))
       ]);
       setEmployee(empRes.data);
-      setPayments(salaryRes.data);
-      
+      setPayments(salaryRes.data || []);
+      setDepartments(deptsRes.data || []);
+      setShifts(shiftsRes.data || []);
+
       const p = empRes.data.profile;
       setEditInfo({
-        baseSalary: p?.baseSalary || '',
+        baseSalary: p?.baseSalary !== undefined && p?.baseSalary !== null ? String(p.baseSalary) : '',
         bankName: p?.bankName || '',
         accountNumber: p?.accountNumber || '',
         designation: p?.designation || '',
-        department: p?.department || ''
+        designationId: p?.designationId || (p?.designation ? '__legacy__' : ''),
+        phone: p?.phone || '',
+        joiningDate: p?.joiningDate ? String(p.joiningDate).slice(0, 10) : '',
+        departmentId: empRes.data.departmentId || '',
+        shiftProfileId: empRes.data.shiftProfileId || ''
       });
-    } catch (err) {
-      console.error('Failed to load employee details:', err);
+    } catch {
+      console.error('Failed to load employee details');
+      toast.error('Unable to load the employee details. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (isOpen && employeeId) {
-      fetchData();
-    }
-  }, [isOpen, employeeId]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId]);
 
-  const handleUpdateProfile = async () => {
-    if (!employeeId) return;
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  const handleCancelEdit = () => {
+    if (employee) {
+      const p = employee.profile;
+      setEditInfo({
+        baseSalary: p?.baseSalary !== undefined && p?.baseSalary !== null ? String(p.baseSalary) : '',
+        bankName: p?.bankName || '',
+        accountNumber: p?.accountNumber || '',
+        designation: p?.designation || '',
+        designationId: p?.designationId || (p?.designation ? '__legacy__' : ''),
+        phone: p?.phone || '',
+        joiningDate: p?.joiningDate ? String(p.joiningDate).slice(0, 10) : '',
+        departmentId: employee.departmentId || '',
+        shiftProfileId: employee.shiftProfileId || ''
+      });
+    }
+    setIsEditing(false);
+  };
+
+  const handleUpdateProfile = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setSaving(true);
     try {
-      // Assuming existing employee update endpoint supports these fields
-      // or we might need a specific profile update endpoint
-      await api.patch(`/employees/${employeeId}`, {
-        designation: editInfo.designation,
-        department: editInfo.department,
-        baseSalary: parseFloat(editInfo.baseSalary) || 0,
-        bankName: editInfo.bankName,
-        accountNumber: editInfo.accountNumber
-      });
-      fetchData();
-    } catch (err) {
-      alert('Failed to update employee information');
+      const payload: Record<string, unknown> = {
+        departmentId: editInfo.departmentId || null,
+        bankName: editInfo.bankName.trim() || undefined,
+        accountNumber: editInfo.accountNumber.trim() || undefined
+      };
+
+      if (isSuperAdmin) {
+        payload.shiftProfileId = editInfo.shiftProfileId || null;
+      }
+
+      if (editInfo.designationId === '__legacy__') {
+        if (editInfo.designation.trim()) {
+          payload.designation = editInfo.designation.trim();
+        }
+      } else {
+        payload.designationId = editInfo.designationId || null;
+      }
+
+      if (editInfo.phone.trim()) {
+        payload.phone = editInfo.phone.trim();
+      }
+
+      if (editInfo.joiningDate) {
+        payload.joiningDate = new Date(`${editInfo.joiningDate}T00:00:00.000Z`).toISOString();
+      }
+
+      if (editInfo.baseSalary.trim() !== '') {
+        const salaryNum = parseFloat(editInfo.baseSalary);
+        if (!isNaN(salaryNum)) {
+          payload.baseSalary = salaryNum;
+        }
+      }
+
+      await api.patch(`/employees/${employeeId}`, payload);
+      await fetchData();
+      setIsEditing(false);
+      toast.success('Employee information updated.');
+    } catch {
+      toast.error('Failed to update employee information.');
     } finally {
       setSaving(false);
     }
   };
 
   const handleMarkPaid = async () => {
-    if (!employeeId || !editInfo.baseSalary) {
-      alert('Please set a base salary before recording payment.');
+    if (!editInfo.baseSalary) {
+      toast.error('Please set a base salary before recording a payment.');
       return;
     }
-    
     setPaying(true);
     const now = new Date();
     try {
@@ -123,299 +225,639 @@ export default function EmployeeDetailsDrawer({ isOpen, onClose, employeeId }: P
         amount: parseFloat(editInfo.baseSalary)
       });
       fetchData();
-    } catch (err) {
-      alert('Failed to record payment');
+      toast.success('Salary payment recorded.');
+    } catch {
+      toast.error('Failed to record the salary payment.');
     } finally {
       setPaying(false);
     }
   };
 
-  const currentMonthPaid = payments.some(p => 
-    p.month === new Date().getMonth() + 1 && 
-    p.year === new Date().getFullYear() && 
+  const currentMonthPaid = payments.some(p =>
+    p.month === new Date().getMonth() + 1 &&
+    p.year === new Date().getFullYear() &&
     p.status === 'PAID'
   );
 
+  const av = avatarColor || AVATAR_FALLBACK;
+  const departmentName = departments.find(d => d.id === editInfo.departmentId)?.name;
+  const shiftName = shifts.find(s => s.id === editInfo.shiftProfileId)?.name;
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Overlay */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[100]"
-          />
-
-          {/* Drawer */}
-          <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-white shadow-2xl z-[101] overflow-hidden flex flex-col"
-          >
-            {/* Header */}
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-100">
-                  {employee?.name.charAt(0).toUpperCase() || '...'}
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-800 leading-tight">{employee?.name || 'Loading...'}</h2>
-                  <p className="text-xs text-slate-400 font-medium">#{employee?.profile?.employeeCode || 'EMP-000'}</p>
-                </div>
-              </div>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-slate-200/50 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <X size={20} />
-              </button>
+    <motion.div
+      className="fixed inset-0 z-[70] flex justify-end overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+    >
+      <div
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <motion.aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={employee ? `${employee.name} details` : 'Employee details'}
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+        className="relative flex h-full w-full max-w-2xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl"
+      >
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+              <Loader2 size={20} className="animate-spin mb-2" />
+              <p className="text-xs font-medium">Loading employee record…</p>
             </div>
-
-            {/* Content Area */}
-            <div className="flex-1 overflow-y-auto bg-white">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                  <Loader2 size={24} className="animate-spin mb-2" />
-                  <p className="text-xs font-medium">Synchronising records...</p>
-                </div>
-              ) : (
-                <>
-                  {/* Tabs */}
-                  <div className="px-6 border-b border-slate-100 bg-slate-50/20">
-                    <div className="flex gap-8">
-                      {[
-                        { id: 'overview', icon: User, label: 'Overview' },
-                        { id: 'salary', icon: DollarSign, label: 'Payroll' },
-                        { id: 'attendance', icon: History, label: 'Logs' }
-                      ].map(tab => (
-                        <button
-                          key={tab.id}
-                          onClick={() => setActiveTab(tab.id as any)}
-                          className={`flex items-center gap-2 py-4 text-xs font-bold transition-all relative ${
-                            activeTab === tab.id ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
-                          }`}
-                        >
-                          <tab.icon size={13} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
-                          {tab.label}
-                          {activeTab === tab.id && (
-                            <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />
-                          )}
-                        </button>
-                      ))}
+          ) : (
+            <>
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3 mb-5">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div
+                    className="w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0 shadow-xs"
+                    style={{ backgroundColor: av.bg, color: av.text }}
+                  >
+                    {employee?.name.charAt(0).toUpperCase() || '?'}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h3 className="truncate text-base font-bold text-slate-800">{employee?.name}</h3>
+                      <span className={`inline-flex flex-shrink-0 items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${
+                        employee?.isActive ? 'text-emerald-600 bg-emerald-50 border border-emerald-100' : 'text-red-500 bg-red-50 border border-red-100'
+                      }`}>
+                        {employee?.isActive ? <CheckCircle2 size={9} /> : <AlertCircle size={9} />}
+                        {employee?.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs text-slate-400 font-mono">#{employee?.profile?.employeeCode || 'EMP-000'}</p>
+                      <span className="text-slate-300">•</span>
+                      <p className="text-xs font-medium text-slate-600 truncate">{editInfo.designation || employee?.profile?.designation || 'Staff Member'}</p>
                     </div>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {canManage && (
+                    !isEditing ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditing(true);
+                          setActiveTab('details');
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-primary rounded-lg"
+                        aria-label="Edit employee"
+                      >
+                        <Pencil size={13} />
+                        Edit
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-secondary rounded-lg"
+                        aria-label="Cancel editing"
+                      >
+                        <X size={13} />
+                        Cancel
+                      </button>
+                    )
+                  )}
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-ghost rounded-lg"
+                    aria-label="Close employee details"
+                  >
+                    <X size={14} />
+                    Close
+                  </button>
+                </div>
+              </div>
 
-                  <div className="p-6 space-y-8">
-                    {/* OVERVIEW TAB */}
-                    {activeTab === 'overview' && (
-                      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        {/* Status Card */}
-                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 rounded-full ${employee?.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                            <span className="text-xs font-bold text-slate-700">{employee?.isActive ? 'ACTIVE ACCOUNT' : 'INACTIVE'}</span>
-                            <span className="text-xs text-slate-400 font-medium">· Joined {employee?.createdAt ? format(new Date(employee.createdAt), 'MMM yyyy') : '—'}</span>
-                          </div>
-                          {!currentMonthPaid && employee?.isActive && (
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg border border-amber-100 border-dashed">
-                              <AlertCircle size={10} />
-                              <span className="text-[10px] font-bold">SALARY PENDING</span>
-                            </div>
-                          )}
+              {/* Quick summary ribbon */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white border border-slate-200/80 rounded-xl p-3.5 mb-5 shadow-2xs">
+                <InfoField icon={Mail} label="Email" value={employee?.email || '—'} />
+                <InfoField icon={Building2} label="Department" value={departmentName || employee?.profile?.department || 'Unassigned'} />
+                <InfoField icon={Clock3} label="Shift" value={shiftName || 'Company Default'} />
+                <InfoField
+                  icon={DollarSign}
+                  label="Salary Status"
+                  value={currentMonthPaid ? 'Paid' : 'Pending'}
+                  badge={
+                    employee?.isActive && !currentMonthPaid
+                      ? 'text-amber-700 bg-amber-50 border border-amber-200'
+                      : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                  }
+                />
+              </div>
+
+              {/* Tabs */}
+              <div className="border-b border-slate-200 mb-5">
+                <div className="flex gap-6">
+                  {(
+                    [
+                      { id: 'details' as const, icon: Briefcase, label: isEditing ? 'Edit Details' : 'Details' },
+                      ...(canManage ? [{ id: 'salary' as const, icon: DollarSign, label: 'Payroll' }] : []),
+                      { id: 'attendance' as const, icon: History, label: 'Logs' }
+                    ] as Array<{ id: 'details' | 'salary' | 'attendance'; icon: React.ElementType; label: string }>
+                  ).map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center gap-2 py-2.5 text-xs font-bold transition-all relative ${
+                        activeTab === tab.id ? 'text-blue-700' : 'text-slate-400 hover:text-blue-700'
+                      }`}
+                    >
+                      <tab.icon size={13} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
+                      {tab.label}
+                      {activeTab === tab.id && (
+                        <motion.div layoutId="panelTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <AnimatePresence mode="wait">
+                {/* Details Tab — View Mode */}
+                {activeTab === 'details' && !isEditing && (
+                  <motion.div
+                    key="details-view"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className="space-y-5"
+                  >
+                    {/* Organization & Role */}
+                    <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-2xs">
+                      <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <Briefcase size={15} className="text-blue-600" />
+                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Employment & Role</h4>
                         </div>
+                        <span className="text-[11px] font-semibold text-slate-400 font-mono">
+                          ID: #{employee?.profile?.employeeCode || 'EMP-000'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <DetailItem icon={Building2} label="Department" value={departmentName || employee?.profile?.department || 'Unassigned'} />
+                        <DetailItem icon={Briefcase} label="Designation" value={editInfo.designation || employee?.profile?.designation || '—'} />
+                        <DetailItem icon={Clock3} label="Shift Profile" value={shiftName || 'Company Default'} />
+                        <DetailItem icon={ShieldCheck} label="System Role" value={employee?.role ? employee.role.replace('_', ' ') : '—'} />
+                      </div>
+                    </div>
 
-                        {/* Professional Info */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Designation</label>
-                            <input 
-                              value={editInfo.designation} 
-                              onChange={e => setEditInfo(p => ({ ...p, designation: e.target.value }))}
-                              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none" 
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Department</label>
-                            <input 
-                              value={editInfo.department} 
-                              onChange={e => setEditInfo(p => ({ ...p, department: e.target.value }))}
-                              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none" 
-                            />
-                          </div>
+                    {/* Contact & Personal */}
+                    <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-2xs">
+                      <div className="flex items-center gap-2 pb-3 mb-4 border-b border-slate-100">
+                        <Mail size={15} className="text-blue-600" />
+                        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Contact & Timeline</h4>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <DetailItem icon={Mail} label="Email Address" value={employee?.email || '—'} />
+                        <DetailItem icon={Phone} label="Mobile Phone" value={editInfo.phone || 'Not provided'} />
+                        <DetailItem
+                          icon={Calendar}
+                          label="Date Joined"
+                          value={
+                            employee?.profile?.joiningDate
+                              ? formatLongDateDMY(employee.profile.joiningDate)
+                              : employee?.createdAt
+                                ? formatLongDateDMY(employee.createdAt)
+                                : '—'
+                          }
+                        />
+                        <DetailItem
+                          icon={CheckCircle2}
+                          label="Employment Status"
+                          value={employee?.isActive ? 'Active Member' : 'Inactive'}
+                          badgeColor={employee?.isActive ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-rose-700 bg-rose-50 border border-rose-200'}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Compensation & Banking (Representing all fields!) */}
+                    <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-2xs">
+                      <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <Landmark size={15} className="text-blue-600" />
+                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Payroll & Bank Details</h4>
                         </div>
+                        {canManage && (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            currentMonthPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            {currentMonthPaid ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
+                            {currentMonthPaid ? 'Paid this month' : 'Salary Pending'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <DetailItem
+                          icon={DollarSign}
+                          label="Base Salary"
+                          value={editInfo.baseSalary && Number(editInfo.baseSalary) > 0 ? `Rs. ${Number(editInfo.baseSalary).toLocaleString()}` : 'Not set'}
+                          highlight
+                        />
+                        <DetailItem
+                          icon={Building2}
+                          label="Bank Name"
+                          value={editInfo.bankName || 'Not provided'}
+                        />
+                        <DetailItem
+                          icon={CreditCard}
+                          label="Account / IBAN"
+                          value={editInfo.accountNumber || 'Not provided'}
+                        />
+                      </div>
+                    </div>
 
-                        <hr className="border-slate-100" />
+                    {/* Edit action CTA */}
+                    {canManage && (
+                      <div className="flex items-center justify-between p-4 bg-blue-50/70 border border-blue-100 rounded-xl">
+                        <div className="min-w-0 pr-3">
+                          <p className="text-xs font-bold text-blue-900">Need to update this employee?</p>
+                          <p className="text-[11px] text-blue-700/80 mt-0.5">Modify designation, department, shift, salary, or banking records.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditing(true)}
+                          className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold btn-primary rounded-lg shadow-xs"
+                        >
+                          <Pencil size={13} />
+                          Edit Details
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
 
-                        {/* Payroll Settings */}
+                {/* Details Tab — Edit Mode */}
+                {activeTab === 'details' && isEditing && canManage && (
+                  <motion.div
+                    key="details-edit"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex items-center justify-between p-3.5 bg-blue-50 border border-blue-100 rounded-xl">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+                          <Pencil size={14} />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-blue-900">Editing Employee Details</h4>
+                          <p className="text-[10px] text-blue-600">Update job assignment, contact info, and banking records.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-2 py-1 rounded"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleUpdateProfile();
+                      }}
+                      className="space-y-6"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Left column: Organization & Contact */}
                         <div className="space-y-4">
-                          <div className="flex items-center gap-2 mb-1">
-                            <CreditCard size={14} className="text-indigo-500" />
-                            <h3 className="text-sm font-bold text-slate-800">Bank & Payroll Details</h3>
+                          <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
+                            <Briefcase size={13} className="text-blue-600" />
+                            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-tight">Job & Organization</h4>
                           </div>
-                          
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Base Salary (PKR)</label>
-                              <div className="relative">
-                                <DollarSign size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input 
-                                  type="number"
-                                  value={editInfo.baseSalary} 
-                                  onChange={e => setEditInfo(p => ({ ...p, baseSalary: e.target.value }))}
-                                  className="w-full text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none"
-                                  placeholder="0.00"
-                                />
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Designation</label>
+                            <DesignationSelect
+                              departmentId={editInfo.departmentId}
+                              value={editInfo.designationId}
+                              onChange={(designationId) =>
+                                setEditInfo(p => ({ ...p, designationId }))
+                              }
+                              legacyLabel={
+                                !employee?.profile?.designationId &&
+                                editInfo.departmentId === (employee?.departmentId || '') &&
+                                employee?.profile?.designation
+                                  ? employee.profile.designation
+                                  : null
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Mobile Number</label>
+                            <input
+                              type="tel"
+                              value={editInfo.phone}
+                              onChange={e => setEditInfo(p => ({ ...p, phone: e.target.value }))}
+                              placeholder="+92 300 1234567"
+                              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Joining Date</label>
+                            <input
+                              type="date"
+                              value={editInfo.joiningDate}
+                              onChange={e => setEditInfo(p => ({ ...p, joiningDate: e.target.value }))}
+                              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
+                            />
+                            <p className="text-[10px] text-slate-400">Leave cycles reset on this date each year.</p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Department</label>
+                            {departments.length === 0 ? (
+                              <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                                Unassigned
                               </div>
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Bank Name</label>
-                              <div className="relative">
-                                <Building2 size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input 
-                                  value={editInfo.bankName} 
-                                  onChange={e => setEditInfo(p => ({ ...p, bankName: e.target.value }))}
-                                  className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-indigo-400 transition-all"
-                                  placeholder="e.g. HBL, Alfalah..."
-                                />
+                            ) : (
+                              <select
+                                value={editInfo.departmentId}
+                                onChange={e =>
+                                  setEditInfo(p => ({
+                                    ...p,
+                                    departmentId: e.target.value,
+                                    designationId: '',
+                                    designation: '',
+                                  }))
+                                }
+                                className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
+                              >
+                                {isSuperAdmin && <option value="">Unassigned</option>}
+                                {departments.map((d) => (
+                                  <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Shift Profile</label>
+                            {!isSuperAdmin ? (
+                              <div className="w-full rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-sm text-blue-700">
+                                Inherited from the employee&apos;s department
                               </div>
+                            ) : shifts.length === 0 ? (
+                              <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                                Default (Company settings)
+                              </div>
+                            ) : (
+                              <select
+                                value={editInfo.shiftProfileId}
+                                onChange={e => setEditInfo(p => ({ ...p, shiftProfileId: e.target.value }))}
+                                className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
+                              >
+                                <option value="">Default (Company settings)</option>
+                                {shifts.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right column: Bank & Payroll */}
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
+                            <CreditCard size={13} className="text-blue-600" />
+                            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-tight">Bank & Payroll</h4>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Base Salary (PKR)</label>
+                            <div className="relative">
+                              <DollarSign size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                              <input
+                                type="number"
+                                value={editInfo.baseSalary}
+                                onChange={e => setEditInfo(p => ({ ...p, baseSalary: e.target.value }))}
+                                className="w-full text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 transition-all"
+                                placeholder="0.00"
+                              />
                             </div>
                           </div>
 
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Account Number (IBAN)</label>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Bank Name</label>
+                            <div className="relative">
+                              <Building2 size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                              <input
+                                type="text"
+                                value={editInfo.bankName}
+                                onChange={e => setEditInfo(p => ({ ...p, bankName: e.target.value }))}
+                                className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 transition-all"
+                                placeholder="e.g. HBL, Meezan Bank, Alfalah"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Account Number / IBAN</label>
                             <div className="relative">
                               <Landmark size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                              <input 
-                                value={editInfo.accountNumber} 
+                              <input
+                                type="text"
+                                value={editInfo.accountNumber}
                                 onChange={e => setEditInfo(p => ({ ...p, accountNumber: e.target.value }))}
-                                className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-indigo-400 transition-all"
+                                className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 transition-all"
                                 placeholder="Bank account or IBAN"
                               />
                             </div>
                           </div>
                         </div>
-
-                        {/* Save Action */}
-                        <div className="pt-2">
-                          <button
-                            onClick={handleUpdateProfile}
-                            disabled={saving}
-                            className="w-full inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold py-2.5 rounded-lg transition-all shadow-lg shadow-slate-100 disabled:opacity-50"
-                          >
-                            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                            Update Enterprise Record
-                          </button>
-                        </div>
                       </div>
-                    )}
 
-                    {/* SALARY TAB */}
-                    {activeTab === 'salary' && (
-                      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        {/* Current Status Area */}
-                        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 relative overflow-hidden">
-                          <div className="absolute -right-4 -bottom-4 opacity-10">
-                            <DollarSign size={80} className="text-indigo-900" />
-                          </div>
-                          <div className="relative z-10">
-                            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Current Ledger Status</p>
-                            <h4 className="text-xl font-bold text-indigo-900">{format(new Date(), 'MMMM yyyy')}</h4>
-                            
-                            <div className="mt-4 flex items-center justify-between">
+                      {/* Action buttons */}
+                      <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+                        <button
+                          type="button"
+                          onClick={handleCancelEdit}
+                          disabled={saving}
+                          className="px-4 py-2 text-xs font-bold btn-secondary rounded-lg"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={saving}
+                          className="inline-flex items-center justify-center gap-2 px-5 py-2 btn-primary text-xs font-bold rounded-lg shadow-xs"
+                        >
+                          {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                          Save Changes
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                )}
+
+                {/* Salary Tab */}
+                {activeTab === 'salary' && canManage && (
+                  <motion.div
+                    key="salary"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className="space-y-5"
+                  >
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">
+                          {formatMonthYear(new Date())} Ledger
+                        </p>
+                        <p className="text-lg font-black text-blue-900">
+                          Rs. {Number(editInfo.baseSalary).toLocaleString() || '0'}
+                        </p>
+                      </div>
+                      {currentMonthPaid ? (
+                        <div className="px-3 py-1 bg-blue-200 text-blue-800 rounded-full text-[10px] font-black uppercase tracking-wider">
+                          Paid
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleMarkPaid}
+                          disabled={paying}
+                          className="px-5 py-2.5 btn-primary text-xs font-black rounded-xl"
+                        >
+                          {paying ? <Loader2 size={12} className="animate-spin" /> : 'MARK AS PAID'}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {payments.length === 0 ? (
+                        <div className="py-10 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-100 rounded-xl">
+                          <History size={22} className="mb-2" />
+                          <p className="text-xs font-bold">No payment history yet</p>
+                        </div>
+                      ) : (
+                        payments.map(pay => (
+                          <div key={pay.id} className="flex items-center justify-between p-3.5 bg-white border border-slate-100 rounded-xl">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-slate-50 rounded-lg flex flex-col items-center justify-center text-[10px] font-black text-slate-400">
+                                <span className="uppercase">{new Date(pay.year, pay.month - 1).toLocaleString('default', { month: 'short' })}</span>
+                                <span className="text-slate-300">{pay.year}</span>
+                              </div>
                               <div>
-                                <p className="text-xs text-indigo-600/70 font-medium tracking-tight">Expected Salary</p>
-                                <p className="text-lg font-black text-indigo-900">Rs. {Number(editInfo.baseSalary).toLocaleString() || '0'}</p>
+                                <p className="text-sm font-bold text-slate-700">Rs. {Number(pay.amount).toLocaleString()}</p>
+                                <p className="text-[10px] text-slate-400 font-medium">Ref: {pay.referenceId?.slice(0, 8) || 'AUTO-SYSTEM'}</p>
                               </div>
-                              {currentMonthPaid ? (
-                                <div className="flex flex-col items-end">
-                                  <div className="px-3 py-1 bg-indigo-200 text-indigo-800 rounded-full text-[10px] font-black uppercase tracking-wider mb-1">
-                                    PAID
-                                  </div>
-                                  <p className="text-[10px] text-indigo-600/60 font-medium italic">Confirmed on web</p>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={handleMarkPaid}
-                                  disabled={paying}
-                                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-lg shadow-indigo-200 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
-                                >
-                                  {paying ? <Loader2 size={12} className="animate-spin" /> : 'MARK AS PAID'}
-                                </button>
-                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-lg">
+                              <CheckCircle2 size={10} />
+                              <span className="text-[10px] font-bold">PAID</span>
                             </div>
                           </div>
-                        </div>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
 
-                        {/* Payment History */}
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <History size={14} className="text-slate-400" />
-                              <h3 className="text-sm font-bold text-slate-800">Historical Ledger</h3>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">{payments.length} Records</span>
-                          </div>
+                {/* Attendance Tab */}
+                {activeTab === 'attendance' && (
+                  <motion.div
+                    key="attendance"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex flex-col items-center justify-center py-14"
+                  >
+                    <div className="w-14 h-14 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-300 mb-3">
+                      <History size={26} />
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-800">Attendance Logs</h4>
+                    <p className="text-xs text-slate-400 mt-1 max-w-[240px] text-center leading-relaxed">
+                      Recent check-in history and daily logs dashboard coming soon.
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
+          )}
+        </div>
+      </motion.aside>
+    </motion.div>
+  );
+}
 
-                          <div className="space-y-2.5">
-                            {payments.length === 0 ? (
-                              <div className="py-12 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-50 rounded-2xl">
-                                <History size={24} className="mb-2" />
-                                <p className="text-xs font-bold">No payment history yet</p>
-                              </div>
-                            ) : (
-                              payments.map(pay => (
-                                <div key={pay.id} className="group flex items-center justify-between p-3.5 bg-white border border-slate-100 rounded-xl hover:border-slate-200 hover:shadow-sm transition-all">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-slate-50 rounded-lg flex flex-col items-center justify-center text-[10px] font-black text-slate-400">
-                                      <span className="uppercase">{new Date(pay.year, pay.month - 1).toLocaleString('default', { month: 'short' })}</span>
-                                      <span className="text-slate-300">{pay.year}</span>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm font-bold text-slate-700">Rs. {Number(pay.amount).toLocaleString()}</p>
-                                      <p className="text-[10px] text-slate-400 font-medium">Ref: {pay.referenceId?.slice(0,8) || 'AUTO-SYSTEM'}</p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-lg">
-                                    <CheckCircle2 size={10} />
-                                    <span className="text-[10px] font-bold">PAID</span>
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+function InfoField({
+  icon: Icon,
+  label,
+  value,
+  badge
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  badge?: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 min-w-0">
+      <Icon size={13} className="text-slate-400 mt-0.5 flex-shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+        {badge ? (
+          <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${badge}`}>
+            {value}
+          </span>
+        ) : (
+          <p className="text-xs font-semibold text-slate-700 truncate mt-0.5">{value}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
-                    {/* ATTENDANCE TAB */}
-                    {activeTab === 'attendance' && (
-                      <div className="flex flex-col items-center justify-center py-20 animate-in fade-in zoom-in-95 duration-300">
-                         <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
-                            <History size={32} />
-                         </div>
-                         <h4 className="text-sm font-bold text-slate-800">Attendance Logs</h4>
-                         <p className="text-xs text-slate-400 mt-1 max-w-[200px] text-center leading-relaxed">Recent activity logs and check-in history dashboard coming soon in the next update.</p>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center flex-1">
-                ENTERPRISE RECORD SYSTEM · SECURE LEDGER v1.0
-              </p>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+function DetailItem({
+  icon: Icon,
+  label,
+  value,
+  highlight = false,
+  badgeColor
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  highlight?: boolean;
+  badgeColor?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 mt-0.5 flex-shrink-0">
+        <Icon size={14} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+        {badgeColor ? (
+          <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-md mt-0.5 ${badgeColor}`}>
+            {value}
+          </span>
+        ) : (
+          <p className={`text-xs font-semibold truncate mt-0.5 ${highlight ? 'text-blue-700 font-bold' : 'text-slate-700'}`}>
+            {value}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
