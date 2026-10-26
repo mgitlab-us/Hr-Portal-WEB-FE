@@ -19,6 +19,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
+  setUser: (user: User) => void;
   logout: () => void;
 }
 
@@ -37,14 +38,19 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ user, accessToken, refreshToken });
       },
+      setUser: (user) => set({ user }),
       logout: () => {
+        set({ user: null, accessToken: null, refreshToken: null });
         if (typeof window !== 'undefined') {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
+          // Zustand persist rewrites this key on `set`, so remove it after the
+          // state update. A stale persisted user makes protected layouts think
+          // the session is still valid and immediately re-fetch with no tokens.
+          localStorage.removeItem('auth-storage');
           // Clear cookie for middleware
           document.cookie = "isAuthenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         }
-        set({ user: null, accessToken: null, refreshToken: null });
       },
     }),
     {

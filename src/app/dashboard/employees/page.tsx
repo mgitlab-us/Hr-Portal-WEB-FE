@@ -1,11 +1,24 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, UserX, MoreVertical, Trash2, Power, DollarSign } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, MoreVertical, Trash2, Power, DollarSign } from 'lucide-react';
 import { api } from '@/lib/api';
+import { todayDateKey } from '@/lib/datetime';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import EmployeeDetailsDrawer from '@/components/employees/EmployeeDetailsDrawer';
+import CredentialsShareModal from '@/components/employees/CredentialsShareModal';
+import DesignationSelect from '@/components/employees/DesignationSelect';
+import FilterChips from '@/components/filters/FilterChips';
+import { useToast } from '@/components/ui/toast';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Employee {
   id: string;
@@ -19,6 +32,7 @@ interface Employee {
   profile?: {
     employeeCode: string;
     designation: string;
+    designationId?: string | null;
     department: string;
   };
 }
@@ -26,6 +40,17 @@ interface Employee {
 interface Department {
   id: string;
   name: string;
+  admin?: { id: string; name: string; email: string } | null;
+}
+
+interface ShiftProfile {
+  id: string;
+  name: string;
+}
+
+interface PayrollStatusRecord {
+  id: string;
+  payment?: { status: 'PAID' | 'PENDING' } | null;
 }
 
 const AVATAR_COLORS = [
@@ -65,7 +90,7 @@ function RoleBadge({ role }: { role: Employee['role'] }) {
     );
   if (role === 'ADMIN')
     return (
-      <span className="inline-flex items-center text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
+      <span className="inline-flex items-center text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
         Admin
       </span>
     );
@@ -85,18 +110,21 @@ function Field({
       <label className="block text-xs font-medium text-slate-600">{label}</label>
       <input
         {...props}
-        className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+        className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
       />
     </div>
   );
 }
 
 export default function EmployeesPage() {
+  const { toast } = useToast();
   const { user } = useAuthStore();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'EMPLOYEE' | 'ADMIN'>('ALL');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -104,20 +132,38 @@ export default function EmployeesPage() {
   const [newEmployee, setNewEmployee] = useState({
     name: '',
     email: '',
-    password: '',
+    phone: '',
     role: 'EMPLOYEE',
-    designation: '',
+    designationId: '',
     department: '',
     departmentId: '',
     employeeCode: '',
     shiftProfileId: '',
+    joiningDate: todayDateKey(),
   });
-  const [shifts, setShifts] = useState<any[]>([]);
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    name: string;
+    email: string;
+    password: string;
+    employeeCode: string;
+  } | null>(null);
+  const [shifts, setShifts] = useState<ShiftProfile[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ type: 'DEACTIVATE' | 'ARCHIVE'; id: string; name: string } | null>(null);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
-  const [isDetailsDrawerOpen, setIsDetailsDrawerOpen] = useState(false);
-  const [payrollStatus, setPayrollStatus] = useState<any[]>([]);
+  const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
+  const [payrollStatus, setPayrollStatus] = useState<PayrollStatusRecord[]>([]);
+
+  const canManageEmployee = (emp: Employee) => {
+    if (user?.role === 'SUPER_ADMIN') return true;
+    if (user?.role === 'ADMIN') {
+      const managedDepartmentIds = departments
+        .filter((d: Department) => d.admin?.id === user?.id)
+        .map((d) => d.id);
+      const employeeDepartmentId = emp.departmentId || emp.department?.id;
+      return !!employeeDepartmentId && managedDepartmentIds.includes(employeeDepartmentId);
+    }
+    return false;
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -130,14 +176,6 @@ export default function EmployeesPage() {
     }
   };
 
-  useEffect(() => {
-    if (user?.mustChangePassword) return;
-    fetchEmployees();
-    fetchPayrollStatus();
-    api.get('/shifts').then(res => setShifts(res.data)).catch(() => { });
-    api.get('/departments').then(res => setDepartments(res.data)).catch(() => { });
-  }, [user]);
-
   const fetchPayrollStatus = async () => {
     try {
       const res = await api.get('/salary/status');
@@ -145,37 +183,125 @@ export default function EmployeesPage() {
     } catch { }
   };
 
-  const filteredEmployees = useMemo(() => {
-    return employees.filter(
-      (emp) => {
-        const matchesSearch =
-          emp.name.toLowerCase().includes(search.toLowerCase()) ||
-          emp.email.toLowerCase().includes(search.toLowerCase()) ||
-          emp.profile?.employeeCode?.toLowerCase().includes(search.toLowerCase());
-        const matchesDept =
-          !departmentFilter ||
-          emp.departmentId === departmentFilter ||
-          emp.department?.id === departmentFilter;
-        return matchesSearch && matchesDept;
-      }
-    );
+  useEffect(() => {
+    if (user?.mustChangePassword) return;
+    const init = async () => {
+      await fetchEmployees();
+      await fetchPayrollStatus();
+      api.get('/shifts').then(res => setShifts(res.data)).catch(() => { });
+      api.get('/departments').then(res => {
+        setDepartments(res.data);
+      }).catch(() => { });
+    };
+    init();
+  }, [user]);
+
+  const scopedEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      const matchesSearch =
+        emp.name.toLowerCase().includes(search.toLowerCase()) ||
+        emp.email.toLowerCase().includes(search.toLowerCase()) ||
+        emp.profile?.employeeCode?.toLowerCase().includes(search.toLowerCase());
+      const matchesDept =
+        !departmentFilter ||
+        emp.departmentId === departmentFilter ||
+        emp.department?.id === departmentFilter;
+      return matchesSearch && matchesDept;
+    });
   }, [employees, search, departmentFilter]);
+
+  const statusOptions = useMemo(() => {
+    const active = scopedEmployees.filter((emp) => emp.isActive).length;
+    return [
+      { label: 'All statuses', value: 'ALL', count: scopedEmployees.length },
+      { label: 'Active', value: 'ACTIVE', count: active },
+      { label: 'Inactive', value: 'INACTIVE', count: scopedEmployees.length - active },
+    ];
+  }, [scopedEmployees]);
+
+  const roleOptions = useMemo(() => {
+    const staff = scopedEmployees.filter((emp) => emp.role === 'EMPLOYEE').length;
+    return [
+      { label: 'All roles', value: 'ALL', count: scopedEmployees.length },
+      { label: 'Employees', value: 'EMPLOYEE', count: staff },
+      { label: 'Admins', value: 'ADMIN', count: scopedEmployees.length - staff },
+    ];
+  }, [scopedEmployees]);
+
+  const filteredEmployees = useMemo(() => {
+    return scopedEmployees.filter((emp) => {
+      const matchesStatus =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'ACTIVE' ? emp.isActive : !emp.isActive);
+      const matchesRole =
+        roleFilter === 'ALL' ||
+        (roleFilter === 'EMPLOYEE' ? emp.role === 'EMPLOYEE' : emp.role !== 'EMPLOYEE');
+      return matchesStatus && matchesRole;
+    });
+  }, [scopedEmployees, statusFilter, roleFilter]);
+
+  const hasActiveFilters =
+    !!search || !!departmentFilter || statusFilter !== 'ALL' || roleFilter !== 'ALL';
+
+  const expandedEmployee =
+    employees.find((emp) => emp.id === expandedEmployeeId) ?? null;
+
+  /** Generate a secure random temporary password */
+  const generateTempPassword = () => {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const special = '@#!$';
+    const all = upper + lower + digits + special;
+    const rand = (s: string) => s[Math.floor(Math.random() * s.length)];
+    const base = rand(upper) + rand(lower) + rand(digits) + rand(special);
+    const rest = Array.from({ length: 6 }, () => rand(all)).join('');
+    return (base + rest).split('').sort(() => Math.random() - 0.5).join('');
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setEmployeeCodeError(null);
+    const tempPassword = generateTempPassword();
     try {
-      await api.post('/employees', newEmployee);
+      const res = await api.post('/employees', {
+        ...newEmployee,
+        joiningDate: newEmployee.joiningDate
+          ? new Date(`${newEmployee.joiningDate}T00:00:00.000Z`).toISOString()
+          : undefined,
+        password: tempPassword,
+        mustChangePassword: true,
+      });
+      const createdEmp = res.data as { name?: string; email?: string; profile?: { employeeCode?: string } };
       setIsAddModalOpen(false);
       fetchEmployees();
-      setNewEmployee({ name: '', email: '', password: '', role: 'EMPLOYEE', designation: '', department: '', departmentId: '', employeeCode: '', shiftProfileId: '' });
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || '';
-      if (err?.response?.status === 409 && msg.toLowerCase().includes('code')) {
+      setNewEmployee({
+        name: '',
+        email: '',
+        phone: '',
+        role: 'EMPLOYEE',
+        designationId: '',
+        department: '',
+        departmentId: '',
+        employeeCode: '',
+        shiftProfileId: '',
+        joiningDate: todayDateKey(),
+      });
+      // Show credential card
+      setCreatedCredentials({
+        name: createdEmp?.name || newEmployee.name,
+        email: createdEmp?.email || newEmployee.email,
+        password: tempPassword,
+        employeeCode: createdEmp?.profile?.employeeCode || newEmployee.employeeCode || '—',
+      });
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { message?: string } } };
+      const msg = e?.response?.data?.message || '';
+      if (e?.response?.status === 409 && msg.toLowerCase().includes('code')) {
         setEmployeeCodeError('This Employee ID is already in use. Please edit the ID field below.');
       } else {
-        alert(msg || 'Failed to create employee. Please check if email is unique.');
+        toast.error(msg || 'Failed to create employee. Please check if the email is unique.');
       }
     } finally {
       setSubmitting(false);
@@ -188,7 +314,7 @@ export default function EmployeesPage() {
       setConfirmModal(null);
       fetchEmployees();
     } catch {
-      alert('Action failed.');
+      toast.error('Action failed.');
     }
   };
 
@@ -198,12 +324,29 @@ export default function EmployeesPage() {
       setConfirmModal(null);
       fetchEmployees();
     } catch {
-      alert('Action failed.');
+      toast.error('Action failed.');
     }
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedEmployeeId((prev) => (prev === id ? null : id));
+  };
+
+  const closeExpanded = () => {
+    setExpandedEmployeeId(null);
+    fetchEmployees();
+    fetchPayrollStatus();
   };
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setNewEmployee((p) => ({ ...p, [k]: e.target.value }));
+
+  const setDepartment = (e: React.ChangeEvent<HTMLSelectElement>) =>
+    setNewEmployee((p) => ({
+      ...p,
+      departmentId: e.target.value,
+      designationId: '',
+    }));
 
   return (
     <DashboardLayout>
@@ -212,9 +355,6 @@ export default function EmployeesPage() {
         {/* ── Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-              Admin · Directory
-            </p>
             <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">
               Staff Directory
             </h1>
@@ -224,7 +364,7 @@ export default function EmployeesPage() {
           </div>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
           >
             <UserPlus size={14} />
             Add Employee
@@ -235,43 +375,73 @@ export default function EmployeesPage() {
         <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
 
           {/* Toolbar */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
-            <div className="relative flex-1 max-w-sm">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search name, email or ID…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          <div className="border-b border-slate-100">
+            <div className="flex items-center gap-3 px-5 py-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search name, email or ID…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost rounded-md"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              {departments.length > 0 && (
+                <Select
+                  value={departmentFilter || 'ALL'}
+                  onValueChange={(value) => setDepartmentFilter(value === 'ALL' ? '' : value)}
                 >
-                  <X size={12} />
+                  <SelectTrigger className="h-9 w-[180px] rounded-lg border-slate-200 bg-slate-50 text-sm text-slate-700">
+                    <SelectValue placeholder="All departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All departments</SelectItem>
+                    {departments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
+                <Users size={12} />
+                <span>{filteredEmployees.length} result{filteredEmployees.length !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-50 bg-slate-50/40 px-5 py-3">
+              <FilterChips
+                options={statusOptions}
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+              />
+              <div className="hidden h-4 w-px bg-slate-200 sm:block" />
+              <FilterChips
+                options={roleOptions}
+                value={roleFilter}
+                onChange={(value) => setRoleFilter(value as typeof roleFilter)}
+              />
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setDepartmentFilter('');
+                    setStatusFilter('ALL');
+                    setRoleFilter('ALL');
+                  }}
+                  className="ml-auto text-xs font-semibold text-slate-400 transition-colors hover:text-blue-600"
+                >
+                  Clear filters
                 </button>
               )}
-            </div>
-            {departments.length > 0 && (
-              <div className="relative">
-                <select
-                  value={departmentFilter}
-                  onChange={(e) => setDepartmentFilter(e.target.value)}
-                  className="appearance-none bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                >
-                  <option value="">All departments</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-            )}
-            <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
-              <Users size={12} />
-              <span>{filteredEmployees.length} result{filteredEmployees.length !== 1 ? 's' : ''}</span>
             </div>
           </div>
 
@@ -284,6 +454,20 @@ export default function EmployeesPage() {
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Users size={28} className="mb-3 text-slate-300" />
               <p className="text-sm">No employees found</p>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setDepartmentFilter('');
+                    setStatusFilter('ALL');
+                    setRoleFilter('ALL');
+                  }}
+                  className="mt-2 text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -311,123 +495,137 @@ export default function EmployeesPage() {
                 <tbody className="divide-y divide-slate-50">
                   {filteredEmployees.map((emp) => {
                     const av = avatarColor(emp.name);
+                    const isExpanded = expandedEmployeeId === emp.id;
                     return (
-                      <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors group">
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold flex-shrink-0"
-                              style={{ backgroundColor: av.bg, color: av.text }}
-                            >
-                              {emp.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-slate-700">
-                                {emp.name}
-                              </p>
-                              <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                                <Mail size={10} />
-                                {emp.email}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <RoleBadge role={emp.role} />
-                        </td>
-                        <td className="px-5 py-3.5 hidden md:table-cell">
-                          <p className="text-sm text-slate-600">
-                            {emp.profile?.designation || '—'}
-                          </p>
-                          <div className="mt-1">
-                            <DepartmentBadge name={emp.department?.name || emp.profile?.department} />
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5 text-center">
-                          {emp.isActive ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
-                              <CheckCircle2 size={9} />
-                              Active
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md">
-                              <XCircle size={9} />
-                              Inactive
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5 hidden lg:table-cell">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-xs text-slate-400 font-mono">
-                              {emp.profile?.employeeCode || '—'}
-                            </span>
-                            {payrollStatus.find(p => p.id === emp.id)?.payment?.status === 'PAID' ? (
-                               <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">
-                                 <DollarSign size={8} /> Paid
-                               </span>
-                            ) : (
-                               <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400 uppercase tracking-tighter">
-                                 <DollarSign size={8} /> Pending
-                               </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5 text-right relative">
-                          {emp.role !== 'SUPER_ADMIN' && (
-                            <>
-                              <button
-                                onClick={() => setOpenMenuId(openMenuId === emp.id ? null : emp.id)}
-                                className={`p-1.5 rounded-md transition-all ${openMenuId === emp.id ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                      <tr
+                        key={emp.id}
+                        onClick={() => toggleExpand(emp.id)}
+                        className={`cursor-pointer transition-colors group ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/60'}`}
+                      >
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+                                style={{ backgroundColor: av.bg, color: av.text }}
                               >
-                                <MoreVertical size={14} />
-                              </button>
-
-                              {openMenuId === emp.id && (
-                                <>
-                                  <div 
-                                    className="fixed inset-0 z-10" 
-                                    onClick={() => setOpenMenuId(null)} 
-                                  />
-                                  <div className="absolute right-12 top-1/2 -translate-y-1/2 z-20 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1.5 overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200">
-                                    <button
-                                      onClick={() => {
-                                        setOpenMenuId(null);
-                                        setSelectedEmployeeId(emp.id);
-                                        setIsDetailsDrawerOpen(true);
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
-                                    >
-                                      <FileText size={12} className="text-indigo-500" />
-                                      View Full Profile
-                                    </button>
-                                    <hr className="my-1 border-slate-50" />
-                                    <button
-                                      onClick={() => {
-                                        setOpenMenuId(null);
-                                        setConfirmModal({ type: 'DEACTIVATE', id: emp.id, name: emp.name });
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                                    >
-                                      <Power size={12} className={emp.isActive ? 'text-amber-500' : 'text-emerald-500'} />
-                                      {emp.isActive ? 'Deactivate Account' : 'Activate Account'}
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setOpenMenuId(null);
-                                        setConfirmModal({ type: 'ARCHIVE', id: emp.id, name: emp.name });
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
-                                    >
-                                      <Trash2 size={12} />
-                                      Archive Account (Delete)
-                                    </button>
-                                  </div>
-                                </>
+                                {emp.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-slate-700">
+                                  {emp.name}
+                                </p>
+                                <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                                  <Mail size={10} />
+                                  {emp.email}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <RoleBadge role={emp.role} />
+                          </td>
+                          <td className="px-5 py-3.5 hidden md:table-cell">
+                            <p className="text-sm text-slate-600">
+                              {emp.profile?.designation || '—'}
+                            </p>
+                            <div className="mt-1">
+                              <DepartmentBadge name={emp.department?.name || emp.profile?.department} />
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            {emp.isActive ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
+                                <CheckCircle2 size={9} />
+                                Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md">
+                                <XCircle size={9} />
+                                Inactive
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 hidden lg:table-cell">
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs text-slate-400 tabular-nums">
+                                {emp.profile?.employeeCode || '—'}
+                              </span>
+                              {payrollStatus.find(p => p.id === emp.id)?.payment?.status === 'PAID' ? (
+                                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-blue-500 uppercase tracking-tighter">
+                                   <DollarSign size={8} /> Paid
+                                 </span>
+                              ) : (
+                                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400 uppercase tracking-tighter">
+                                   <DollarSign size={8} /> Pending
+                                 </span>
                               )}
-                            </>
-                          )}
-                        </td>
-                      </tr>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-right relative">
+                            {emp.role !== 'SUPER_ADMIN' && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenMenuId(openMenuId === emp.id ? null : emp.id);
+                                  }}
+                                  className={`p-1.5 rounded-md btn-ghost ${openMenuId === emp.id ? 'bg-blue-50 text-blue-700' : ''}`}
+                                >
+                                  <MoreVertical size={14} />
+                                </button>
+
+                                {openMenuId === emp.id && (
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-10"
+                                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); }}
+                                    />
+                                    <div
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="absolute right-12 top-1/2 -translate-y-1/2 z-20 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1.5 overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200"
+                                    >
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuId(null);
+                                          toggleExpand(emp.id);
+                                        }}
+                                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
+                                      >
+                                        <FileText size={12} className="text-blue-500" />
+                                        {isExpanded ? 'Collapse Profile' : 'View Full Profile'}
+                                      </button>
+                                      {canManageEmployee(emp) && (
+                                        <>
+                                          <hr className="my-1 border-slate-50" />
+                                          <button
+                                            onClick={() => {
+                                              setOpenMenuId(null);
+                                              setConfirmModal({ type: 'DEACTIVATE', id: emp.id, name: emp.name });
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors"
+                                          >
+                                            <Power size={12} className={emp.isActive ? 'text-amber-500' : 'text-emerald-500'} />
+                                            {emp.isActive ? 'Deactivate Account' : 'Activate Account'}
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setOpenMenuId(null);
+                                              setConfirmModal({ type: 'ARCHIVE', id: emp.id, name: emp.name });
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                                          >
+                                            <Trash2 size={12} />
+                                            Archive Account (Delete)
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </td>
+                        </tr>
                     );
                   })}
                 </tbody>
@@ -449,21 +647,21 @@ export default function EmployeesPage() {
                 {confirmModal.type === 'ARCHIVE' ? 'Archive Employee?' : 'Change Account Status?'}
               </h3>
               <p className="text-sm text-slate-500 mt-2">
-                {confirmModal.type === 'ARCHIVE' 
-                  ? `Are you sure you want to archive ${confirmModal.name}? This will remove them from the active list but keep their historical records.` 
+                {confirmModal.type === 'ARCHIVE'
+                  ? `Are you sure you want to archive ${confirmModal.name}? This will remove them from the active list but keep their historical records.`
                   : `Are you sure you want to change the status for ${confirmModal.name}? Deactivated users cannot access their accounts.`}
               </p>
             </div>
             <div className="flex border-t border-slate-100">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors border-r border-slate-100"
+                className="flex-1 px-4 py-3 text-sm font-semibold btn-ghost border-r border-slate-100"
               >
                 Cancel
               </button>
               <button
                 onClick={() => confirmModal.type === 'ARCHIVE' ? handleArchive(confirmModal.id) : toggleStatus(confirmModal.id)}
-                className={`flex-1 px-4 py-3 text-sm font-bold text-white transition-colors ${confirmModal.type === 'ARCHIVE' ? 'bg-red-500 hover:bg-red-600' : 'bg-slate-800 hover:bg-slate-900'}`}
+                className={`flex-1 px-4 py-3 text-sm font-bold ${confirmModal.type === 'ARCHIVE' ? 'btn-danger' : 'btn-primary'}`}
               >
                 Confirm
               </button>
@@ -487,7 +685,7 @@ export default function EmployeesPage() {
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                className="p-1.5 btn-ghost rounded-md"
               >
                 <X size={15} />
               </button>
@@ -514,36 +712,54 @@ export default function EmployeesPage() {
               </div>
 
               <Field
-                label="Initial password"
+                label="Mobile number"
                 required
-                type="password"
-                value={newEmployee.password}
-                onChange={set('password')}
-                placeholder="Minimum 6 characters"
+                type="tel"
+                value={newEmployee.phone}
+                onChange={set('phone')}
+                placeholder="+92 300 1234567"
+              />
+
+              <Field
+                label="Joining date"
+                required
+                type="date"
+                value={newEmployee.joiningDate}
+                onChange={set('joiningDate')}
               />
 
               <div className="grid grid-cols-2 gap-4">
-                <Field
-                  label="Designation"
-                  value={newEmployee.designation}
-                  onChange={set('designation')}
-                  placeholder="Software Engineer"
-                />
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium text-slate-600">Department</label>
-                  <div className="relative">
-                    <select
-                      value={newEmployee.departmentId}
-                      onChange={set('departmentId')}
-                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
-                    >
-                      <option value="">Unassigned</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  </div>
+                  {departments.length === 0 ? (
+                    <div className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-500">
+                      Unassigned
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <select
+                        value={newEmployee.departmentId}
+                        onChange={setDepartment}
+                        className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                      >
+                        <option value="">Unassigned</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-slate-600">Designation</label>
+                  <DesignationSelect
+                    departmentId={newEmployee.departmentId}
+                    value={newEmployee.designationId}
+                    onChange={(designationId) =>
+                      setNewEmployee((p) => ({ ...p, designationId }))
+                    }
+                  />
                 </div>
               </div>
 
@@ -557,10 +773,10 @@ export default function EmployeesPage() {
                     set('employeeCode')(e);
                   }}
                   placeholder="Auto-generated if blank (e.g. ASE-SOF-001)"
-                  className={`w-full bg-white border rounded-lg py-2.5 px-3 text-sm font-mono text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full bg-white border rounded-lg py-2.5 px-3 text-sm tabular-nums text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
                     employeeCodeError
                       ? 'border-red-400 ring-red-100 ring-2'
-                      : 'border-slate-200 focus:ring-indigo-500/20 focus:border-indigo-400'
+                      : 'border-slate-200 focus:ring-blue-500/20 focus:border-blue-400'
                   }`}
                 />
                 {employeeCodeError ? (
@@ -578,31 +794,43 @@ export default function EmployeesPage() {
                     <select
                       value={newEmployee.role}
                       onChange={set('role')}
-                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                     >
                       <option value="EMPLOYEE">Employee</option>
-                      <option value="ADMIN">Admin (HR Manager)</option>
+                      {user?.role === 'SUPER_ADMIN' && (
+                        <option value="ADMIN">Admin (HR Manager)</option>
+                      )}
                     </select>
                     <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
-                {/* Shift select */}
+                {/* Shift select — company templates are super-admin only */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium text-slate-600">Shift Profile</label>
-                  <div className="relative">
-                    <select
-                      value={newEmployee.shiftProfileId}
-                      onChange={set('shiftProfileId')}
-                      className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
-                    >
-                      <option value="">Default (Company settings)</option>
-                      {shifts.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  </div>
+                  {user?.role !== 'SUPER_ADMIN' ? (
+                    <div className="w-full rounded-lg border border-blue-100 bg-blue-50/60 py-2.5 px-3 text-sm text-blue-700">
+                      Inherits the selected department&apos;s shift automatically
+                    </div>
+                  ) : shifts.length === 0 ? (
+                    <div className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-500">
+                      Default (Company settings)
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <select
+                        value={newEmployee.shiftProfileId}
+                        onChange={set('shiftProfileId')}
+                        className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                      >
+                        <option value="">Default (Company settings)</option>
+                        {shifts.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -611,14 +839,14 @@ export default function EmployeesPage() {
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium btn-ghost rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex items-center gap-2 px-5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                  className="inline-flex items-center gap-2 px-5 py-2 btn-primary text-sm font-medium rounded-lg"
                 >
                   {submitting && <Loader2 size={13} className="animate-spin" />}
                   Create Employee
@@ -629,16 +857,28 @@ export default function EmployeesPage() {
         </div>
       )}
 
-
-      <EmployeeDetailsDrawer 
-        isOpen={isDetailsDrawerOpen}
-        onClose={() => {
-          setIsDetailsDrawerOpen(false);
-          fetchEmployees();
-          fetchPayrollStatus();
+      {/* ── Credentials Share Modal */}
+      <CredentialsShareModal
+        isOpen={!!createdCredentials}
+        credentials={createdCredentials}
+        onClose={() => setCreatedCredentials(null)}
+        onAddAnother={() => {
+          setCreatedCredentials(null);
+          setIsAddModalOpen(true);
         }}
-        employeeId={selectedEmployeeId}
       />
+
+      <AnimatePresence>
+        {expandedEmployee && (
+          <EmployeeDetailsDrawer
+            key={expandedEmployee.id}
+            employeeId={expandedEmployee.id}
+            canManage={canManageEmployee(expandedEmployee)}
+            onClose={closeExpanded}
+            avatarColor={avatarColor(expandedEmployee.name)}
+          />
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }

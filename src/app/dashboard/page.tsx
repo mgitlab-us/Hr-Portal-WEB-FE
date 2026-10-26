@@ -1,330 +1,550 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import {Users,TrendingUp,Activity,UserCheck,UserMinus,Timer,ArrowUpRight,} from 'lucide-react';
+import {
+  Users,
+  TrendingUp,
+  CalendarCheck,
+  UserX,
+  Clock,
+  Plane,
+  FileText,
+} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
+import { formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import HeaderActions, { type NotificationItem } from '@/components/layout/HeaderActions';
+import StatsDrilldownDialog, { type DrilldownMetric } from '@/components/dashboard/StatsDrilldownDialog';
 import { io } from 'socket.io-client';
+
+// ── Status tones — used by the live activity feed (badges + avatars).
+// Green is on-track, yellow is a soft flag, red is a hard flag.
+const TONES = {
+  blue: { bg: '#DBEAFE', chip: '#93C5FD', icon: '#1D4ED8', accent: '#2563EB', dark: '#1E3A8A' },
+  green: { bg: '#DCFCE7', chip: '#86EFAC', icon: '#15803D', accent: '#16A34A', dark: '#052E16' },
+  yellow: { bg: '#FEF9C3', chip: '#FDE047', icon: '#A16207', accent: '#CA8A04', dark: '#422006' },
+  red: { bg: '#FEE2E2', chip: '#FCA5A5', icon: '#B91C1C', accent: '#DC2626', dark: '#450A0A' },
+} as const;
+
+type Tone = keyof typeof TONES;
+
+// ── Stat card palettes — soft tinted wash, matching icon circle
+const STAT_STYLES = {
+  blue: { wash: '#F0F5FF', circle: '#DCE8FF', icon: '#2F6BFF', border: '#E1EAFB' },
+  green: { wash: '#F0FBF5', circle: '#D3F3E3', icon: '#12A06B', border: '#DCF1E6' },
+  purple: { wash: '#F6F3FF', circle: '#E6DFFF', icon: '#6D4AFF', border: '#E8E2FB' },
+  amber: { wash: '#FFF9EE', circle: '#FFE8BF', icon: '#F59E0B', border: '#F8EAD0' },
+  rose: { wash: '#FFF3F5', circle: '#FFDCE3', icon: '#E8405A', border: '#F8E0E5' },
+} as const;
+
+type StatStyle = keyof typeof STAT_STYLES;
+
+const CARD = 'rounded-xl border border-line bg-white shadow-2xs';
 
 // ── Stat card
 function StatCard({
-   label,
-   value,
-   icon: Icon,
-   accent,
-   sub,
+  label,
+  value,
+  icon: Icon,
+  style,
+  sub,
+  subColor,
+  onClick,
 }: {
-   label: string;
-   value: string | number;
-   icon: React.ElementType;
-   accent: string;
-   sub?: string;
+  label: string;
+  value: string | number;
+  icon: React.ElementType;
+  style: StatStyle;
+  sub: string;
+  subColor?: string;
+  onClick?: () => void;
 }) {
-   return (
-      <div className="group relative bg-white border border-slate-100 rounded-xl p-5 flex flex-col gap-4 hover:shadow-md hover:border-slate-200 transition-all duration-200">
-         <div className="flex items-start justify-between">
-            <div
-               className="w-8 h-8 rounded-lg flex items-center justify-center"
-               style={{ backgroundColor: `${accent}14` }}
-            >
-               <Icon size={15} style={{ color: accent }} />
-            </div>
-            <ArrowUpRight
-               size={13}
-               className="text-slate-300 group-hover:text-slate-400 transition-colors"
-            />
-         </div>
-         <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-               {label}
-            </p>
-            <p className="text-3xl font-semibold text-slate-800 tracking-tight leading-none">
-               {value}
-            </p>
-            {sub && <p className="text-xs text-slate-400 mt-1.5">{sub}</p>}
-         </div>
+  const s = STAT_STYLES[style];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`View ${label} details`}
+      className="w-full cursor-pointer rounded-xl text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 hover:ring-1 hover:ring-blue-200"
+    >
+      <div
+        className="rounded-xl border p-3.5 shadow-2xs transition-all hover:shadow-xs"
+        style={{
+          background: `linear-gradient(135deg, ${s.wash} 0%, #FFFFFF 100%)`,
+          borderColor: s.border,
+        }}
+      >
+        <div className="flex items-start justify-between">
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-lg"
+            style={{ backgroundColor: s.circle }}
+          >
+            <Icon size={17} style={{ color: s.icon }} />
+          </div>
+          <TrendingUp size={14} style={{ color: s.icon }} aria-hidden="true" />
+        </div>
+        <div className="mt-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">{label}</p>
+          <p className="mt-1 text-2xl font-bold leading-none tracking-tight text-ink">{value}</p>
+          <p className="mt-1.5 text-xs font-medium text-ink-soft" style={subColor ? { color: subColor } : undefined}>
+            {sub}
+          </p>
+        </div>
       </div>
-   );
+    </button>
+  );
 }
 
-// ── Pulse status badge
+// ── Pulse status badge — green on time, yellow late, red absent/missing
 function StatusBadge({ action }: { action: string }) {
-   const lower = action?.toLowerCase() || '';
-   if (lower.includes('late'))
-      return (
-         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">
-            Late
-         </span>
-      );
-   if (lower.includes('absent') || lower.includes('missing'))
-      return (
-         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md">
-            Absent
-         </span>
-      );
-   if (lower.includes('check') || lower.includes('in'))
-      return (
-         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
-            On time
-         </span>
-      );
-   return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
-         {action}
+  const lower = action?.toLowerCase() || '';
+  const base = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold';
+
+  if (lower.includes('late'))
+    return (
+      <span className={base} style={{ color: TONES.yellow.icon, backgroundColor: TONES.yellow.bg }}>
+        Late
       </span>
-   );
+    );
+  if (lower.includes('absent') || lower.includes('missing'))
+    return (
+      <span className={base} style={{ color: TONES.red.icon, backgroundColor: TONES.red.bg }}>
+        Absent
+      </span>
+    );
+  if (lower.includes('check') || lower.includes('in'))
+    return (
+      <span className={base} style={{ color: TONES.green.icon, backgroundColor: TONES.green.bg }}>
+        Present
+      </span>
+    );
+  return (
+    <span className={`${base} border border-line bg-slate-50 text-ink-soft`}>{action}</span>
+  );
 }
 
-const AVATAR_COLORS = [
-   '#6366F1', '#0D9E7A', '#F59E0B', '#E8405A', '#8B5CF6', '#2563EB',
-];
-function avatarColor(name: string) {
-   return AVATAR_COLORS[(name?.charCodeAt(0) || 0) % AVATAR_COLORS.length];
+// Avatar tone follows the same status logic as the badge, not a name hash,
+// so a person's chip color always matches what happened.
+function statusTone(action: string): Tone {
+  const lower = action?.toLowerCase() || '';
+  if (lower.includes('late')) return 'yellow';
+  if (lower.includes('absent') || lower.includes('missing')) return 'red';
+  return 'green';
 }
 
 type PulseItem = {
-   name?: string;
-   action: string;
-   time?: string;
-   color?: string;
-   companyId?: string;
+  name?: string;
+  action: string;
+  time?: string;
+  color?: string;
+  companyId?: string;
 };
 
+// ── Circular attendance gauge with the percentage centred inside
+function AttendanceRing({ percent }: { percent: number }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const size = 84;
+  const stroke = 7;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - clamped / 100);
+
+  return (
+    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${Math.round(clamped)}% attendance`}>
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#DCE6FF" strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={TONES.blue.accent}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          style={{ transition: 'stroke-dashoffset 700ms ease' }}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-base font-bold text-ink">
+        {Math.round(clamped)}%
+      </span>
+    </div>
+  );
+}
+
+// ── Empty state for the live feed
+function EmptyActivity() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 text-center">
+      <div className="relative mb-3 flex h-16 w-16 items-center justify-center">
+        <div className="absolute inset-0 rounded-full bg-gradient-to-b from-[#EEF4FF] to-[#E3EDFF]" />
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 100 100"
+          className="absolute inset-0 motion-safe:animate-[spin_8s_linear_infinite]"
+        >
+          <circle
+            cx="50"
+            cy="50"
+            r="47"
+            fill="none"
+            stroke="#BFD3FF"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeDasharray="70 226"
+          />
+          <circle cx="50" cy="3" r="3.5" fill="#BFD3FF" />
+        </svg>
+        <FileText size={22} className="relative text-[#2563EB]" />
+      </div>
+      <p className="text-sm font-bold text-ink">No recent activity</p>
+      <p className="mt-1 max-w-xs text-xs text-ink-soft">
+        When staff check in, their activity will appear here.
+      </p>
+    </div>
+  );
+}
+
+// Assumes the API sends average work time as decimal hours (e.g. "7.5").
+function formatWorkHours(raw: string | number): string {
+  const hours = Number(raw);
+  if (!Number.isFinite(hours) || hours <= 0) return '0m';
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+const NOTIFICATIONS_KEY = 'tapin_notifications';
+
 export default function DashboardOverview() {
-   const { user } = useAuthStore();
-   const [stats, setStats] = useState({
-      overallAttendance: 0,
-      present: 0,
-      total: 0,
-      absent: 0,
-      late: 0,
-      avgWorkHours: '0.0',
-      attendanceChange: null as number | null,
-   });
-   const [pulse, setPulse] = useState<PulseItem[]>([]);
+  const { user } = useAuthStore();
+  const [stats, setStats] = useState({
+    overallAttendance: 0,
+    present: 0,
+    total: 0,
+    absent: 0,
+    late: 0,
+    onLeave: 0,
+    avgWorkHours: '0.0',
+    attendanceChange: null as number | null,
+  });
+  const [pulse, setPulse] = useState<PulseItem[]>([]);
+  const [isOverviewLoading, setIsOverviewLoading] = useState(true);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [drilldownMetric, setDrilldownMetric] = useState<DrilldownMetric | null>(null);
 
-   useEffect(() => {
-      if (!user?.companyId || user?.mustChangePassword) return;
+  useEffect(() => {
+    const init = () => {
+      const saved = localStorage.getItem(NOTIFICATIONS_KEY);
+      if (saved) {
+        try {
+          setNotifications(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse notifications:', e);
+        }
+      }
+    };
+    init();
+  }, []);
 
-      const fetchDashboard = async () => {
-         try {
-            const [statsRes, pulseRes] = await Promise.all([
-               api.get('/attendance/stats/company'),
-               api.get('/attendance/stats/company-pulse'),
-            ]);
-            setStats(statsRes.data);
-            setPulse(pulseRes.data);
-         } catch (err) {
-            console.error('Overview data fetch failed:', err);
-         }
-      };
+  const saveNotifications = (next: NotificationItem[]) => {
+    setNotifications(next);
+    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(next));
+  };
 
-      fetchDashboard();
+  useEffect(() => {
+    if (!user?.companyId || user?.mustChangePassword) return;
 
-      const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1').replace(/\/api\/v1$/, '');
-      const socket = io(socketUrl, {
-         auth: { token: useAuthStore.getState().accessToken },
-         transports: ['websocket'],
+    const fetchDashboard = async () => {
+      setIsOverviewLoading(true);
+      try {
+        const [statsRes, pulseRes] = await Promise.all([
+          api.get('/attendance/stats/company'),
+          api.get('/attendance/stats/company-pulse'),
+        ]);
+        setStats(statsRes.data);
+        setPulse(pulseRes.data);
+      } catch (err) {
+        console.error('Overview data fetch failed:', err);
+      } finally {
+        setIsOverviewLoading(false);
+      }
+    };
+
+    fetchDashboard();
+
+    // Coalesce bursts of socket events into at most one refresh every few seconds.
+    // A busy company can produce many check-ins at once; without this the dashboard
+    // burns through the API rate limit.
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleDashboardRefresh = () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        fetchDashboard();
+      }, 4000);
+    };
+
+    const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1').replace(/\/api\/v1$/, '');
+    const socket = io(socketUrl, {
+      auth: { token: useAuthStore.getState().accessToken },
+      transports: ['websocket'],
+    });
+
+    const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    const addNotification = (notif: NotificationItem) => {
+      setNotifications((prev) => {
+        const updated = [notif, ...prev];
+        localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
+        return updated;
       });
+    };
 
-      socket.on('connect_error', (err) => {
-         console.error('Socket connection error:', err);
+    socket.on('connect_error', (err) => {
+      console.error('Socket connection error:', err);
+    });
+
+    socket.on('activity:pulse', (data) => {
+      if (data.companyId !== user.companyId) return;
+      setPulse((prev) => [data, ...prev].slice(0, 8));
+      scheduleDashboardRefresh();
+    });
+
+    socket.on('stats:update', (data) => {
+      if (data.companyId !== user.companyId) return;
+      scheduleDashboardRefresh();
+    });
+
+    socket.on('notification:geofence', (data) => {
+      addNotification({
+        id: data.id || makeId('geofence'),
+        title: data.title || 'Geofence Alert',
+        message: data.message,
+        timestamp: data.timestamp || new Date().toISOString(),
+        type: 'geofence',
+        read: false,
       });
+    });
 
-      socket.on('activity:pulse', (data) => {
-         if (data.companyId !== user.companyId) return;
-         setPulse((prev) => [data, ...prev].slice(0, 8));
-         fetchDashboard();
+    socket.on('notification:new', (data) => {
+      addNotification({
+        id: data.id || makeId('notif'),
+        title: data.title,
+        message: data.message,
+        timestamp: data.timestamp || new Date().toISOString(),
+        type: data.type || 'notice',
+        read: false,
       });
+    });
 
-      return () => {
-         socket.disconnect();
-      };
-   }, [user]);
+    socket.on('notice:new', (data) => {
+      addNotification({
+        id: data.id || makeId('notice'),
+        title: 'New Announcement',
+        message: data.title,
+        timestamp: data.createdAt || new Date().toISOString(),
+        type: 'notice',
+        read: false,
+      });
+    });
 
-   const [today, setToday] = useState('');
-   
-   useEffect(() => {
-      setToday(new Date().toLocaleDateString('en-US', {
-         weekday: 'long',
-         month: 'long',
-         day: 'numeric',
-         year: 'numeric',
-      }));
-   }, []);
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      socket.disconnect();
+    };
+  }, [user]);
 
-   return (
-      <DashboardLayout>
-         <div className="min-h-screen bg-slate-50 p-6 lg:p-8 space-y-6">
+  const [today] = useState(() => formatWeekdayDateDMY(new Date()));
 
-            {/* ── Header */}
-            <div className="flex items-start justify-between">
-               <div>
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-                     Admin · Command Center
-                  </p>
-                  <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">
-                     Dashboard
-                  </h1>
-                  <p className="text-sm text-slate-400 mt-0.5">{today}</p>
-               </div>
-               <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-lg px-3 py-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                     Live
+  const attendanceRounded = Math.round(stats.overallAttendance);
+
+  return (
+    <DashboardLayout
+      headerActions={
+        <HeaderActions
+          notifications={notifications}
+          onNotificationsChange={saveNotifications}
+          showProfile={false}
+        />
+      }
+    >
+      <div className="min-h-screen space-y-5 bg-canvas px-4 py-5 sm:px-6 lg:py-6">
+        {/* ── Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold leading-tight tracking-tight text-ink">Dashboard</h1>
+            <p className="mt-0.5 text-xs text-ink-soft">{today}</p>
+          </div>
+        </div>
+
+        {/* ── Stat cards */}
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <StatCard
+            label="Total Staff"
+            value={isOverviewLoading ? '—' : stats.total}
+            icon={Users}
+            style="blue"
+            sub={isOverviewLoading ? 'Loading...' : 'Active personnel'}
+            onClick={() => setDrilldownMetric('total')}
+          />
+          <StatCard
+            label="Present Today"
+            value={isOverviewLoading ? '—' : stats.present}
+            icon={CalendarCheck}
+            style="green"
+            sub={isOverviewLoading ? 'Loading...' : `${attendanceRounded}% attendance`}
+            onClick={() => setDrilldownMetric('present')}
+          />
+          <StatCard
+            label="On Leave"
+            value={isOverviewLoading ? '—' : stats.onLeave}
+            icon={Plane}
+            style="purple"
+            sub={isOverviewLoading ? 'Loading...' : 'Approved leave'}
+            subColor="#6D4AFF"
+            onClick={() => setDrilldownMetric('on-leave')}
+          />
+          <StatCard
+            label="Late Arrivals"
+            value={isOverviewLoading ? '—' : stats.late}
+            icon={Clock}
+            style="amber"
+            sub={isOverviewLoading ? 'Loading...' : 'Flagged today'}
+            onClick={() => setDrilldownMetric('late')}
+          />
+          <StatCard
+            label="Absent"
+            value={isOverviewLoading ? '—' : stats.absent}
+            icon={UserX}
+            style="rose"
+            sub={isOverviewLoading ? 'Loading...' : 'Not checked in'}
+            onClick={() => setDrilldownMetric('absent')}
+          />
+        </div>
+
+        {/* ── Main grid */}
+        <div className="grid grid-cols-1 gap-4.5 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
+          {/* Live activity */}
+          <section className={`${CARD} flex min-h-[380px] flex-col overflow-hidden`}>
+            <div className="flex items-center justify-between border-b border-line px-4.5 py-3">
+              <h2 className="text-sm font-bold text-ink">Staff Activity</h2>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="h-1.5 w-1.5 rounded-full motion-safe:animate-pulse"
+                  style={{ backgroundColor: '#12B76A' }}
+                />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">Live</span>
+              </div>
+            </div>
+
+            {pulse.length > 0 ? (
+              <div className="divide-y divide-line">
+                {pulse.map((item, i) => {
+                  const tone = TONES[statusTone(item.action)];
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 px-4.5 py-2.5 transition-colors hover:bg-[#F7F9FF]"
+                    >
+                      <div
+                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-2xs"
+                        style={{ backgroundColor: tone.accent }}
+                      >
+                        {item.name?.charAt(0)?.toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-semibold text-ink">{item.name}</p>
+                        <p className="truncate text-[11px] text-ink-soft">{item.action}</p>
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-2.5">
+                        <StatusBadge action={item.action} />
+                        <span className="w-14 text-right text-[11px] font-medium tabular-nums text-ink-faint">
+                          {item.time}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyActivity />
+            )}
+          </section>
+
+          {/* Right column */}
+          <div className="flex flex-col gap-4">
+            {/* Attendance rate */}
+            <section className={`${CARD} p-4.5`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">Monthly Pulse</p>
+                  <h2 className="mt-0.5 text-sm font-bold text-ink">Attendance Rate</h2>
+                </div>
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E8F0FF] text-[#2563EB]">
+                  <TrendingUp size={14} aria-hidden="true" />
+                </div>
+              </div>
+
+              <div className="mt-3.5 flex items-center gap-4">
+                <AttendanceRing percent={stats.overallAttendance} />
+                <div className="flex h-20 min-w-0 flex-1 flex-col justify-center border-b border-line pb-1">
+                  <span className="text-xl font-bold leading-none tracking-tight text-ink">
+                    {attendanceRounded}%
                   </span>
-               </div>
-            </div>
+                  <p className="mt-1 text-xs text-ink-soft">On-time arrivals this month</p>
+                </div>
+              </div>
 
-            {/* ── Stat Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-               <StatCard
-                  label="Total Staff"
-                  value={stats.total}
-                  icon={Users}
-                  accent="#6366F1"
-                  sub="Active personnel"
-               />
-               <StatCard
-                  label="Present Today"
-                  value={stats.present}
-                  icon={UserCheck}
-                  accent="#0D9E7A"
-                  sub={`${Math.round(stats.overallAttendance)}% attendance`}
-               />
-               <StatCard
-                  label="Late Arrivals"
-                  value={stats.late}
-                  icon={Timer}
-                  accent="#F59E0B"
-                  sub="Flagged today"
-               />
-               <StatCard
-                  label="Absent"
-                  value={stats.absent}
-                  icon={UserMinus}
-                  accent="#E8405A"
-                  sub="Not checked in"
-               />
-            </div>
+              <div className="mt-3 flex items-center gap-1.5 text-xs font-medium">
+                {stats.attendanceChange === null ? (
+                  <>
+                    <TrendingUp size={14} className="text-[#2563EB]" aria-hidden="true" />
+                    <span className="text-ink-soft">Monitoring on-time trends...</span>
+                  </>
+                ) : stats.attendanceChange >= 0 ? (
+                  <>
+                    <TrendingUp size={14} style={{ color: TONES.green.accent }} aria-hidden="true" />
+                    <span style={{ color: TONES.green.icon }}>+{stats.attendanceChange}% vs last month</span>
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp size={14} className="rotate-180" style={{ color: TONES.red.accent }} aria-hidden="true" />
+                    <span style={{ color: TONES.red.icon }}>{stats.attendanceChange}% vs last month</span>
+                  </>
+                )}
+              </div>
+            </section>
 
-            {/* ── Main Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Avg work hours */}
+            <section className={`${CARD} flex-1 p-4.5`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">Productivity</p>
+                  <h2 className="mt-0.5 text-sm font-bold text-ink">Avg. Work Hours</h2>
+                </div>
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#EDE8FF] text-[#6D4AFF]">
+                  <Clock size={14} aria-hidden="true" />
+                </div>
+              </div>
+              <p className="mt-3 text-2xl font-bold leading-none tracking-tight text-ink">
+                {formatWorkHours(stats.avgWorkHours)}
+              </p>
+              <p className="mt-1 text-xs text-ink-soft">Daily team average</p>
+            </section>
+          </div>
+        </div>
+      </div>
 
-               {/* Live Activity */}
-               <div className="lg:col-span-2 bg-white border border-slate-100 rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-slate-50">
-                     <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">
-                           Real-time
-                        </p>
-                        <h2 className="text-sm font-semibold text-slate-700">
-                           Staff Activity
-                        </h2>
-                     </div>
-                     <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                           Listening
-                        </span>
-                     </div>
-                  </div>
-
-                  {pulse.length > 0 ? (
-                     <div className="divide-y divide-slate-50">
-                        {pulse.map((item, i) => {
-                           const color = item.color || avatarColor(item.name || '');
-                           return (
-                              <div
-                                 key={i}
-                                 className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/60 transition-colors"
-                              >
-                                 <div
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
-                                    style={{ backgroundColor: color }}
-                                 >
-                                    {item.name?.charAt(0)?.toUpperCase()}
-                                 </div>
-                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-slate-700 truncate">
-                                       {item.name}
-                                    </p>
-                                    <p className="text-xs text-slate-400 truncate">
-                                       {item.action}
-                                    </p>
-                                 </div>
-                                 <div className="flex items-center gap-3 flex-shrink-0">
-                                    <StatusBadge action={item.action} />
-                                    <span className="text-xs font-medium text-slate-400 tabular-nums w-14 text-right">
-                                       {item.time}
-                                    </span>
-                                 </div>
-                              </div>
-                           );
-                        })}
-                     </div>
-                  ) : (
-                     <div className="flex flex-col items-center justify-center py-16 text-slate-300">
-                        <Activity size={28} className="mb-3" />
-                        <p className="text-xs font-medium text-slate-400">
-                           Awaiting activity…
-                        </p>
-                     </div>
-                  )}
-               </div>
-
-               {/* Attendance Rate */}
-               <div className="space-y-4">
-                  <div className="bg-white border border-slate-100 rounded-xl p-5">
-                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-                        Monthly Pulse
-                     </p>
-                     <h2 className="text-sm font-semibold text-slate-700 mb-5">
-                        Attendance Rate
-                     </h2>
-
-                     <div className="flex items-end gap-2 mb-4">
-                        <span className="text-4xl font-semibold text-slate-800 tracking-tight leading-none">
-                           {stats.overallAttendance}
-                        </span>
-                        <span className="text-lg font-medium text-slate-400 mb-0.5">%</span>
-                     </div>
-
-                     {/* Progress bar */}
-                     <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mb-3">
-                        <div
-                           className="h-full bg-indigo-500 rounded-full transition-all duration-700"
-                           style={{ width: `${stats.overallAttendance}%` }}
-                        />
-                     </div>
-
-                     <p className="text-xs text-slate-400">
-                        Average on-time arrival rate this month
-                     </p>
-
-                     <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-1.5">{stats.attendanceChange === null ? (<span className="text-xs font-medium text-slate-400">Monitoring on-time trends...</span>) : stats.attendanceChange >= 0 ? (<><TrendingUp size={12} className="text-emerald-500" /><span className="text-xs font-medium text-emerald-600">+{stats.attendanceChange}% vs last month</span></>) : (<><TrendingUp size={12} className="text-red-400 rotate-180" /><span className="text-xs font-medium text-red-500">{stats.attendanceChange}% vs last month</span></>)}</div>
-                  </div>
-
-                  {/* Avg Work Hours */}
-                  <div className="bg-white border border-slate-100 rounded-xl p-5">
-                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-                        Productivity
-                     </p>
-                     <h2 className="text-sm font-semibold text-slate-700 mb-4">
-                        Avg. Work Hours
-                     </h2>
-                     <div className="flex items-end gap-1.5">
-                        <span className="text-4xl font-semibold text-slate-800 tracking-tight leading-none">
-                            {stats.avgWorkHours}
-                        </span>
-                     </div>
-                     <p className="text-xs text-slate-400 mt-2">Daily team average</p>
-                  </div>
-               </div>
-
-            </div>
-         </div>
-      </DashboardLayout>
-   );
+      <StatsDrilldownDialog
+        metric={drilldownMetric}
+        onClose={() => setDrilldownMetric(null)}
+      />
+    </DashboardLayout>
+  );
 }
