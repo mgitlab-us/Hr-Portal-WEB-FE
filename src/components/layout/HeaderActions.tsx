@@ -266,8 +266,7 @@ export default function HeaderActions({
             </div>
 
             <div className="space-y-0.5 p-1.5">
-              {/* TODO: point Profile at a dedicated profile page once one exists */}
-              <Link href="/dashboard/settings" onClick={close} className={MENU_ITEM}>
+              <Link href="/dashboard/profile" onClick={close} className={MENU_ITEM}>
                 <User size={16} className="text-ink-soft" />
                 Profile
               </Link>

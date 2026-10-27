@@ -4,7 +4,6 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
-import ProfileSecurityModal from '@/components/auth/ProfileSecurityModal';
 
 const MENU_ITEM =
   'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-ink transition-colors hover:bg-[#F1F5FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40';
@@ -40,7 +39,6 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const [open, setOpen] = React.useState(false);
-  const [profileModalOpen, setProfileModalOpen] = React.useState(false);
   const dark = variant === 'dark';
   const auto = variant === 'auto';
 
@@ -118,7 +116,7 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
             <div className="space-y-0.5 p-1.5">
               <button
                 type="button"
-                onClick={() => { close(); setProfileModalOpen(true); }}
+                onClick={() => { close(); router.push('/dashboard/profile'); }}
                 className={MENU_ITEM}
                 role="menuitem"
               >
@@ -148,11 +146,6 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
         )}
       </div>
 
-      {/* Profile & Security modal — rendered outside the dropdown so it persists after dropdown closes */}
-      <ProfileSecurityModal
-        isOpen={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-      />
     </>
   );
 }
