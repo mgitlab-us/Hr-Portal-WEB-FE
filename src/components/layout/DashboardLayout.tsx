@@ -16,6 +16,7 @@ import {
   BarChart3,
   Wrench,
   Megaphone,
+  Wallet,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
@@ -44,6 +45,7 @@ const baseNavItems: NavEntry[] = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
   { href: '/dashboard/employees', icon: Users, label: 'Employees' },
   { href: '/dashboard/attendance', icon: Clock, label: 'Attendance' },
+  { href: '/dashboard/payroll', icon: Wallet, label: 'Payroll' },
   { href: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/dashboard/notice-board', icon: Megaphone, label: 'Notice Board' },
   { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
