@@ -12,6 +12,7 @@ interface CorrectionRequest {
   id: string;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvalStage?: 'MANAGER' | 'HR' | 'COMPLETE';
   originalCheckin: string | null;
   originalCheckout: string | null;
   requestedCheckin: string | null;
@@ -115,6 +116,11 @@ function CorrectionCard({
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-slate-400 flex-shrink-0">
+            {req.approvalStage === 'MANAGER' && (
+              <span className="hidden rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700 sm:inline">
+                Stage 1 · Manager
+              </span>
+            )}
             <Calendar size={11} className="text-slate-300" />
             <span className="hidden sm:inline">{formatDate(req.attendanceRecord.date)}</span>
             <span className="sm:hidden">{formatDate(req.attendanceRecord.date, true)}</span>
@@ -181,14 +187,20 @@ function CorrectionCard({
 
 export default function CorrectionsPage() {
   const { toast } = useToast();
-  const [requests, setRequests] = useState<CorrectionRequest[]>([]);
+  const [managerRequests, setManagerRequests] = useState<CorrectionRequest[]>([]);
+  const [hrRequests, setHrRequests] = useState<CorrectionRequest[]>([]);
+  const [queue, setQueue] = useState<'MANAGER' | 'HR'>('MANAGER');
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const fetchRequests = async () => {
     try {
-      const res = await api.get('/corrections/pending');
-      setRequests(res.data);
+      const [managerRes, hrRes] = await Promise.all([
+        api.get('/corrections/manager/pending').catch(() => ({ data: [] })),
+        api.get('/corrections/pending').catch(() => ({ data: [] })),
+      ]);
+      setManagerRequests(managerRes.data || []);
+      setHrRequests(hrRes.data || []);
     } catch (err) {
       console.error('Failed to fetch corrections:', err);
     } finally {
@@ -205,16 +217,22 @@ export default function CorrectionsPage() {
     setProcessingId(id);
     try {
       await api.put(`/corrections/${id}/review`, { status });
-      setRequests((prev) => prev.filter((r) => r.id !== id));
-      toast.success(`Correction request ${status === 'APPROVED' ? 'approved' : 'rejected'}.`);
-    } catch {
-      toast.error('Action failed. Ensure you have Super Admin privileges.');
+      await fetchRequests();
+      toast.success(
+        status === 'APPROVED' && queue === 'MANAGER'
+          ? 'Correction approved and sent to HR for final approval.'
+          : `Correction request ${status === 'APPROVED' ? 'approved' : 'rejected'}.`
+      );
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e?.response?.data?.message || 'Action failed. Check your approval permissions.');
     } finally {
       setProcessingId(null);
     }
   };
 
-  const pending = requests.filter((r) => r.status === 'PENDING');
+  const requests = queue === 'MANAGER' ? managerRequests : hrRequests;
+  const totalPending = managerRequests.length + hrRequests.length;
 
   return (
     <DashboardLayout>
@@ -233,14 +251,44 @@ export default function CorrectionsPage() {
               Review and approve attendance modification requests
             </p>
           </div>
-          {pending.length > 0 && (
+          {totalPending > 0 && (
             <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-lg px-3 py-2 self-start flex-shrink-0">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                {pending.length} pending
+                {totalPending} pending
               </span>
             </div>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setQueue('MANAGER')}
+            className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+              queue === 'MANAGER'
+                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+            }`}
+          >
+            My team · {managerRequests.length}
+          </button>
+          <button
+            type="button"
+            onClick={() => setQueue('HR')}
+            className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+              queue === 'HR'
+                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+            }`}
+          >
+            HR final approval · {hrRequests.length}
+          </button>
+          <span className="ml-auto text-[11px] text-slate-400">
+            {queue === 'MANAGER'
+              ? 'Manager approval moves the correction to HR.'
+              : 'HR approval is final and updates attendance.'}
+          </span>
         </div>
 
         {/* Body */}

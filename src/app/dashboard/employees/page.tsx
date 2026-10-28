@@ -29,6 +29,8 @@ interface Employee {
   createdAt: string;
   departmentId?: string | null;
   department?: { id: string; name: string } | null;
+  managerId?: string | null;
+  manager?: { id: string; name: string; email: string } | null;
   profile?: {
     employeeCode: string;
     designation: string;
@@ -139,6 +141,7 @@ export default function EmployeesPage() {
     departmentId: '',
     employeeCode: '',
     shiftProfileId: '',
+    managerId: '',
     joiningDate: todayDateKey(),
   });
   const [createdCredentials, setCreatedCredentials] = useState<{
@@ -286,6 +289,7 @@ export default function EmployeesPage() {
         departmentId: '',
         employeeCode: '',
         shiftProfileId: '',
+        managerId: '',
         joiningDate: todayDateKey(),
       });
       // Show credential card
@@ -531,6 +535,11 @@ export default function EmployeesPage() {
                             <div className="mt-1">
                               <DepartmentBadge name={emp.department?.name || emp.profile?.department} />
                             </div>
+                            {emp.manager?.name && (
+                              <p className="mt-1 text-[10px] text-slate-400">
+                                Reports to {emp.manager.name}
+                              </p>
+                            )}
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             {emp.isActive ? (
@@ -832,6 +841,36 @@ export default function EmployeesPage() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Direct reporting manager */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600">
+                  Reports to <span className="text-slate-400">(optional)</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={newEmployee.managerId}
+                    onChange={set('managerId')}
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                  >
+                    <option value="">No direct manager</option>
+                    {employees
+                      .filter((employee) => employee.isActive)
+                      .map((employee) => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.name}
+                          {employee.profile?.designation
+                            ? ` · ${employee.profile.designation}`
+                            : ''}
+                        </option>
+                      ))}
+                  </select>
+                  <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Leave and correction requests go to this person first, then to HR.
+                </p>
               </div>
 
               {/* Actions */}
