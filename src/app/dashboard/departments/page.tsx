@@ -53,8 +53,11 @@ export default function DepartmentsPage() {
         api.get('/employees'),
       ]);
       setDepartments(deptRes.data);
+      const empList: Array<{ id: string; name: string; email: string; role: string }> = Array.isArray(empRes.data)
+        ? empRes.data
+        : (empRes.data?.data || []);
       setAdmins(
-        (empRes.data as Array<{ id: string; name: string; email: string; role: string }>)
+        empList
           .filter((e) => e.role === 'ADMIN')
           .map((e) => ({ id: e.id, name: e.name, email: e.email }))
       );

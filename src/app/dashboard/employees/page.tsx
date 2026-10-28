@@ -171,7 +171,7 @@ export default function EmployeesPage() {
   const fetchEmployees = async () => {
     try {
       const res = await api.get('/employees');
-      setEmployees(res.data);
+      setEmployees(Array.isArray(res.data) ? res.data : (res.data?.data || []));
     } catch (err) {
       console.error('Failed to fetch employees:', err);
     } finally {

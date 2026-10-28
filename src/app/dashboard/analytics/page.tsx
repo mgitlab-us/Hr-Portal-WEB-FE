@@ -185,7 +185,8 @@ export default function AnalyticsPage() {
         if (isSuperAdmin) requests.push(api.get('/departments'));
         const results = await Promise.all(requests);
         if (discarded) return;
-        setEmployees(results[0].data);
+        const empData = results[0]?.data;
+        setEmployees(Array.isArray(empData) ? empData : (empData?.data || []));
         if (isSuperAdmin && results[1]) setDepartments(results[1].data);
       } catch (err) {
         if (!discarded) console.error('Failed to fetch reference data:', err);

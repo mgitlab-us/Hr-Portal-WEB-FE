@@ -17,6 +17,7 @@ import {
   Wrench,
   Megaphone,
   Wallet,
+  ScrollText,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
@@ -50,6 +51,7 @@ const baseNavItems: NavEntry[] = [
   { href: '/dashboard/notice-board', icon: Megaphone, label: 'Notice Board' },
   { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
   { href: '/dashboard/leaves', icon: Plane, label: 'Leaves' },
+  { href: '/dashboard/audit-logs', icon: ScrollText, label: 'Audit Logs' },
   { href: '/dashboard/settings', icon: Wrench, label: 'Company Setup' },
 ];
 

@@ -5,11 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mail, Phone, Calendar, Building2, Briefcase, Clock3,
   CreditCard, History, CheckCircle2, AlertCircle, Loader2,
-  DollarSign, Landmark, Save, X, Pencil, ShieldCheck
+  DollarSign, Landmark, Save, X, Pencil, ShieldCheck, FolderLock
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatLongDateDMY, formatMonthYear } from '@/lib/datetime';
 import DesignationSelect from '@/components/employees/DesignationSelect';
+import EmployeeDocumentsTab from '@/components/employees/EmployeeDocumentsTab';
 import { useToast } from '@/components/ui/toast';
 import { useAuthStore } from '@/store/authStore';
 
@@ -69,7 +70,7 @@ const AVATAR_FALLBACK = { bg: '#ECEFFE', text: '#5B6EF5' };
 export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, avatarColor }: Props) {
   const { toast } = useToast();
   const isSuperAdmin = useAuthStore((state) => state.user?.role === 'SUPER_ADMIN');
-  const [activeTab, setActiveTab] = useState<'details' | 'salary' | 'attendance'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'salary' | 'attendance' | 'documents'>('details');
   const [isEditing, setIsEditing] = useState(false);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -108,8 +109,11 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
       setPayments(salaryRes.data || []);
       setDepartments(deptsRes.data || []);
       setShifts(shiftsRes.data || []);
+      const employeeList = Array.isArray(employeesRes.data)
+        ? employeesRes.data
+        : (employeesRes.data?.data || []);
       setManagerOptions(
-        (employeesRes.data || [])
+        employeeList
           .filter((employee: { id: string; isActive: boolean }) => employee.isActive)
           .map((employee: { id: string; name: string }) => ({
             id: employee.id,
@@ -379,8 +383,9 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     [
                       { id: 'details' as const, icon: Briefcase, label: isEditing ? 'Edit Details' : 'Details' },
                       ...(canManage ? [{ id: 'salary' as const, icon: DollarSign, label: 'Payroll' }] : []),
-                      { id: 'attendance' as const, icon: History, label: 'Logs' }
-                    ] as Array<{ id: 'details' | 'salary' | 'attendance'; icon: React.ElementType; label: string }>
+                      { id: 'attendance' as const, icon: History, label: 'Logs' },
+                      { id: 'documents' as const, icon: FolderLock, label: 'Documents' },
+                    ] as Array<{ id: 'details' | 'salary' | 'attendance' | 'documents'; icon: React.ElementType; label: string }>
                   ).map(tab => (
                     <button
                       key={tab.id}
@@ -835,6 +840,22 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     <p className="text-xs text-slate-400 mt-1 max-w-[240px] text-center leading-relaxed">
                       Recent check-in history and daily logs dashboard coming soon.
                     </p>
+                  </motion.div>
+                )}
+
+                {/* Documents / Vault Tab */}
+                {activeTab === 'documents' && (
+                  <motion.div
+                    key="documents"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <EmployeeDocumentsTab
+                      employeeId={employeeId}
+                      canManage={canManage}
+                    />
                   </motion.div>
                 )}
               </AnimatePresence>
