@@ -58,7 +58,7 @@ type PayrollRow = {
   designation: string | null;
   department: string | null;
   baseSalary: number;
-  structure: SalaryStructure;
+  structure: SalaryStructure | null;
   grossSalary: number;
   totalDeductions: number;
   netSalary: number;
@@ -129,15 +129,28 @@ const emptyForm = (): StructureForm => ({
   otherDeduction: '',
 });
 
-const formFromRow = (row: PayrollRow): StructureForm => ({
-  baseSalary: String(row.structure.baseSalary || ''),
-  houseRentAllowance: String(row.structure.houseRentAllowance || ''),
-  transportAllowance: String(row.structure.transportAllowance || ''),
-  medicalAllowance: String(row.structure.medicalAllowance || ''),
-  otherAllowance: String(row.structure.otherAllowance || ''),
-  taxDeduction: String(row.structure.taxDeduction || ''),
-  otherDeduction: String(row.structure.otherDeduction || ''),
+const emptySalaryStructure = (): SalaryStructure => ({
+  baseSalary: 0,
+  houseRentAllowance: 0,
+  transportAllowance: 0,
+  medicalAllowance: 0,
+  otherAllowance: 0,
+  taxDeduction: 0,
+  otherDeduction: 0,
 });
+
+const formFromRow = (row: PayrollRow): StructureForm => {
+  const structure = row.structure ?? emptySalaryStructure();
+  return {
+    baseSalary: String(structure.baseSalary || ''),
+    houseRentAllowance: String(structure.houseRentAllowance || ''),
+    transportAllowance: String(structure.transportAllowance || ''),
+    medicalAllowance: String(structure.medicalAllowance || ''),
+    otherAllowance: String(structure.otherAllowance || ''),
+    taxDeduction: String(structure.taxDeduction || ''),
+    otherDeduction: String(structure.otherDeduction || ''),
+  };
+};
 
 const initials = (name: string) =>
   name
@@ -264,6 +277,7 @@ export default function PayrollPage() {
 
   const saveStructure = async () => {
     if (!editRow) return;
+
     setSavingStructure(true);
     try {
       const payload = Object.fromEntries(
@@ -527,7 +541,8 @@ export default function PayrollPage() {
                   ) : (
                     filteredRows.map((row) => {
                       const paid = row.payment?.status === 'PAID';
-                      const allowances = row.grossSalary - row.structure.baseSalary;
+                      const structure = row.structure ?? emptySalaryStructure();
+                      const allowances = Number(row.grossSalary || 0) - Number(structure.baseSalary || 0);
                       return (
                         <tr key={row.id} className="align-middle transition-colors hover:bg-slate-50/60">
                           <td className="px-4 py-3">
@@ -566,7 +581,7 @@ export default function PayrollPage() {
                                   {money(row.grossSalary)}
                                 </p>
                                 <p className="text-[11px] text-slate-400">
-                                  Basic {money(row.structure.baseSalary)} + allowances {money(allowances)}
+                                  Basic {money(structure.baseSalary)} + allowances {money(allowances)}
                                 </p>
                               </>
                             ) : (

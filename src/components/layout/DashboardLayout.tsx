@@ -62,7 +62,8 @@ const superAdminNavItems: NavEntry[] = [
 /**
  * Role-aware nav list, shared by the sidebar and the header quick-search.
  * SUPER_ADMIN monitors Attendance but doesn't handle Corrections or Leaves;
- * HR Manager (ADMIN) sees everything except Departments.
+ * HR Manager (ADMIN) sees everything except Departments and the company-wide
+ * Audit Logs view.
  */
 export function getNavItems(role?: string | null): NavEntry[] {
   if (role === 'SUPER_ADMIN') {
@@ -72,7 +73,8 @@ export function getNavItems(role?: string | null): NavEntry[] {
       ...baseNavItems.slice(2),
     ].filter((item) => !['Corrections', 'Leaves'].includes(item.label));
   }
-  return baseNavItems;
+  // Audit logs are company-wide and are only exposed to the super admin.
+  return baseNavItems.filter((item) => item.label !== 'Audit Logs');
 }
 
 function isActivePath(pathname: string, href: string) {

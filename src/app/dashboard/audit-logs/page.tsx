@@ -48,10 +48,12 @@ export interface AuditLog {
 }
 
 const ACTION_FILTERS = [
-  { label: 'All Actions', value: '' },
-  { label: 'Employee', value: 'EMPLOYEE' },
+  { label: 'All Records', value: '' },
+  { label: 'Employees', value: 'EMPLOYEE' },
   { label: 'Documents', value: 'DOCUMENT' },
   { label: 'Leaves', value: 'LEAVE' },
+  { label: 'Corrections', value: 'CORRECTION' },
+  { label: 'Payroll', value: 'SALARY' },
   { label: 'Shifts & Config', value: 'SHIFT' },
 ];
 
@@ -81,7 +83,7 @@ export default function AuditLogsPage() {
           limit,
         };
         if (search.trim()) params.search = search.trim();
-        if (actionCategory) params.action = actionCategory;
+        if (actionCategory) params.targetType = actionCategory;
         if (targetType) params.targetType = targetType;
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
@@ -100,6 +102,14 @@ export default function AuditLogsPage() {
           setTotalPages(1);
         }
       } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404) {
+          setLogs([]);
+          setTotalPages(1);
+          setTotalCount(0);
+          return;
+        }
+
         console.error('Failed to load audit logs:', err);
         toast.error('Failed to load audit logs. Please try again.', 'Error');
       } finally {
@@ -119,7 +129,7 @@ export default function AuditLogsPage() {
           limit,
         };
         if (search.trim()) params.search = search.trim();
-        if (actionCategory) params.action = actionCategory;
+        if (actionCategory) params.targetType = actionCategory;
         if (targetType) params.targetType = targetType;
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
@@ -140,6 +150,14 @@ export default function AuditLogsPage() {
         }
       } catch (err: unknown) {
         if (!active) return;
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404) {
+          setLogs([]);
+          setTotalPages(1);
+          setTotalCount(0);
+          return;
+        }
+
         console.error('Failed to load audit logs:', err);
         toast.error('Failed to load audit logs. Please try again.', 'Error');
       } finally {
@@ -253,6 +271,10 @@ export default function AuditLogsPage() {
                   <option value="EMPLOYEE">Employees</option>
                   <option value="DOCUMENT">Documents</option>
                   <option value="LEAVE">Leaves</option>
+                  <option value="CORRECTION">Corrections</option>
+                  <option value="SALARY">Payroll</option>
+                  <option value="SHIFT">Shifts</option>
+                  <option value="COMPANY">Company</option>
                   <option value="SHIFT">Shifts</option>
                   <option value="DEPARTMENT">Departments</option>
                 </select>

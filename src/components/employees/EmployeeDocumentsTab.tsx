@@ -77,6 +77,26 @@ const CATEGORY_FILTERS = [
   { label: 'Certificates', value: 'CERTIFICATE' },
 ];
 
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  txt: 'text/plain',
+  csv: 'text/csv',
+};
+
+const resolveMimeType = (file: File) => {
+  if (file.type) return file.type;
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  return MIME_BY_EXTENSION[extension] || '';
+};
+
 export default function EmployeeDocumentsTab({ employeeId, canManage }: Props) {
   const { toast } = useToast();
 
@@ -108,7 +128,7 @@ export default function EmployeeDocumentsTab({ employeeId, canManage }: Props) {
 
       try {
         const res = await api.get('/documents', {
-          params: { employeeId },
+          params: { employeeId, limit: 100 },
         });
 
         const data = res.data;
@@ -135,7 +155,7 @@ export default function EmployeeDocumentsTab({ employeeId, canManage }: Props) {
     let active = true;
 
     api
-      .get('/documents', { params: { employeeId } })
+      .get('/documents', { params: { employeeId, limit: 100 } })
       .then((res) => {
         if (!active) return;
         const data = res.data;
@@ -198,6 +218,12 @@ export default function EmployeeDocumentsTab({ employeeId, canManage }: Props) {
       return;
     }
 
+    const mimeType = resolveMimeType(selectedFile);
+    if (!mimeType) {
+      toast.error('This file type is not supported by the document vault.', 'Unsupported File');
+      return;
+    }
+
     setUploading(true);
     try {
       const base64Data = await fileToBase64(selectedFile);
@@ -207,7 +233,7 @@ export default function EmployeeDocumentsTab({ employeeId, canManage }: Props) {
         title: uploadForm.title.trim(),
         category: uploadForm.category,
         fileName: selectedFile.name,
-        mimeType: selectedFile.type || 'application/octet-stream',
+        mimeType,
         data: base64Data,
       });
 
