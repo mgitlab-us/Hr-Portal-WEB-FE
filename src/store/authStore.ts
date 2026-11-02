@@ -1,12 +1,28 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
+interface UserPermissions {
+  companyWide: boolean;
+  readAllEmployees: boolean;
+  manageCompany: boolean;
+  manageAllDepartments: boolean;
+  canManageEmployees: boolean;
+  canManagePayroll: boolean;
+  canApproveManager: boolean;
+  canApproveHr: boolean;
+  canViewAuditLogs: boolean;
+}
+
 interface User {
   id: string;
   email: string;
   name: string;
-  role: 'EMPLOYEE' | 'ADMIN' | 'SUPER_ADMIN';
+  role: 'EMPLOYEE' | 'MANAGER' | 'ADMIN' | 'SUPER_ADMIN';
   companyId: string;
+  departmentId?: string | null;
+  adminDepartmentIds?: string[];
+  managerDepartmentIds?: string[];
+  permissions?: UserPermissions;
   company?: {
     name: string;
     timezone: string;

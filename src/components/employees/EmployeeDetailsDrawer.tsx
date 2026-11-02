@@ -5,11 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mail, Phone, Calendar, Building2, Briefcase, Clock3,
   CreditCard, History, CheckCircle2, AlertCircle, Loader2,
-  DollarSign, Landmark, Save, X, Pencil, ShieldCheck
+  DollarSign, Landmark, Save, X, Pencil, ShieldCheck, FolderLock
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatLongDateDMY, formatMonthYear } from '@/lib/datetime';
 import DesignationSelect from '@/components/employees/DesignationSelect';
+import EmployeeDocumentsTab from '@/components/employees/EmployeeDocumentsTab';
+import SalaryLedgerDrawer from '@/components/payroll/SalaryLedgerDrawer';
 import { useToast } from '@/components/ui/toast';
 import { useAuthStore } from '@/store/authStore';
 
@@ -17,11 +19,18 @@ interface Employee {
   id: string;
   name: string;
   email: string;
-  role: 'EMPLOYEE' | 'ADMIN' | 'SUPER_ADMIN';
+  role: 'EMPLOYEE' | 'MANAGER' | 'ADMIN' | 'SUPER_ADMIN';
   isActive: boolean;
   createdAt: string;
   departmentId?: string | null;
+  department?: {
+    id: string;
+    name: string;
+    managers?: { employee: { id: string; name: string; email: string } }[];
+  } | null;
   shiftProfileId?: string | null;
+  managerId?: string | null;
+  manager?: { id: string; name: string; email: string } | null;
   profile?: {
     employeeCode: string;
     designation: string;
@@ -67,7 +76,7 @@ const AVATAR_FALLBACK = { bg: '#ECEFFE', text: '#5B6EF5' };
 export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, avatarColor }: Props) {
   const { toast } = useToast();
   const isSuperAdmin = useAuthStore((state) => state.user?.role === 'SUPER_ADMIN');
-  const [activeTab, setActiveTab] = useState<'details' | 'salary' | 'attendance'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'salary' | 'attendance' | 'documents'>('details');
   const [isEditing, setIsEditing] = useState(false);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -76,6 +85,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [showLedgerDrawer, setShowLedgerDrawer] = useState(false);
 
   const [editInfo, setEditInfo] = useState({
     baseSalary: '',
@@ -363,8 +373,9 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     [
                       { id: 'details' as const, icon: Briefcase, label: isEditing ? 'Edit Details' : 'Details' },
                       ...(canManage ? [{ id: 'salary' as const, icon: DollarSign, label: 'Payroll' }] : []),
-                      { id: 'attendance' as const, icon: History, label: 'Logs' }
-                    ] as Array<{ id: 'details' | 'salary' | 'attendance'; icon: React.ElementType; label: string }>
+                      { id: 'attendance' as const, icon: History, label: 'Logs' },
+                      { id: 'documents' as const, icon: FolderLock, label: 'Documents' },
+                    ] as Array<{ id: 'details' | 'salary' | 'attendance' | 'documents'; icon: React.ElementType; label: string }>
                   ).map(tab => (
                     <button
                       key={tab.id}
@@ -410,6 +421,17 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                         <DetailItem icon={Briefcase} label="Designation" value={editInfo.designation || employee?.profile?.designation || '—'} />
                         <DetailItem icon={Clock3} label="Shift Profile" value={shiftName || 'Company Default'} />
                         <DetailItem icon={ShieldCheck} label="System Role" value={employee?.role ? employee.role.replace('_', ' ') : '—'} />
+                        <DetailItem
+                          icon={ShieldCheck}
+                          label="Department Managers"
+                          value={
+                            (employee?.department?.managers?.length ?? 0) > 0
+                              ? employee!.department!.managers!
+                                  .map((row) => row.employee.name)
+                                  .join(', ')
+                              : 'No reporting manager assigned'
+                          }
+                        />
                       </div>
                     </div>
 
@@ -718,6 +740,15 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     transition={{ duration: 0.15 }}
                     className="space-y-5"
                   >
+                    <button
+                      type="button"
+                      onClick={() => setShowLedgerDrawer(true)}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 hover:bg-blue-100/80 border border-blue-200 text-blue-800 text-xs font-bold rounded-xl transition-colors shadow-2xs cursor-pointer"
+                    >
+                      <History size={14} className="text-blue-600" />
+                      <span>View Full Payment Ledger & Historical Payslips</span>
+                    </button>
+
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 flex items-center justify-between">
                       <div>
                         <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">
@@ -791,10 +822,34 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     </p>
                   </motion.div>
                 )}
+
+                {/* Documents / Vault Tab */}
+                {activeTab === 'documents' && (
+                  <motion.div
+                    key="documents"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <EmployeeDocumentsTab
+                      employeeId={employeeId}
+                      canManage={canManage}
+                    />
+                  </motion.div>
+                )}
               </AnimatePresence>
             </>
           )}
         </div>
+        <SalaryLedgerDrawer
+          isOpen={showLedgerDrawer}
+          onClose={() => setShowLedgerDrawer(false)}
+          employeeId={employeeId}
+          employeeName={employee?.name}
+          employeeCode={employee?.profile?.employeeCode}
+          departmentName={departmentName || employee?.profile?.department}
+        />
       </motion.aside>
     </motion.div>
   );

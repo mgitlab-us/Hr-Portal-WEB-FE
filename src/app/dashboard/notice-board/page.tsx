@@ -32,7 +32,8 @@ const TYPE_FILTERS = [
 export default function NoticeBoardPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
-  const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const canManage = user?.role === 'ADMIN' || isSuperAdmin;
 
   const [notices, setNotices] = useState<Notice[]>([]);
   const [departments, setDepartments] = useState<NoticeDepartment[]>([]);
@@ -73,7 +74,7 @@ export default function NoticeBoardPage() {
   );
 
   const loadDepartments = useCallback(async () => {
-    if (!canManage) return;
+    if (!user?.role || user.role === 'EMPLOYEE') return;
 
     try {
       const response = await api.get('/departments');
@@ -82,7 +83,7 @@ export default function NoticeBoardPage() {
       console.error('[NoticeBoard] Failed to load departments:', error);
       toast.error('Unable to load departments for notice targeting.');
     }
-  }, [canManage, toast]);
+  }, [toast, user]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -98,6 +99,28 @@ export default function NoticeBoardPage() {
     () => new Map(departments.map((department) => [department.id, department.name])),
     [departments]
   );
+
+  const manageableDepartments = useMemo(() => {
+    if (isSuperAdmin) return departments;
+    if (user?.role !== 'ADMIN') return [];
+    return departments.filter(
+      (department) =>
+        department.canManage ||
+        department.admins?.some((admin) => admin.id === user.id) ||
+        department.admin?.id === user.id
+    );
+  }, [departments, isSuperAdmin, user]);
+
+  const manageableDepartmentIds = useMemo(
+    () => new Set(manageableDepartments.map((department) => department.id)),
+    [manageableDepartments]
+  );
+
+  const canManageNotice = (notice: Notice) => {
+    if (isSuperAdmin) return true;
+    if (user?.role !== 'ADMIN' || !notice.departmentId) return false;
+    return manageableDepartmentIds.has(notice.departmentId);
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -144,7 +167,7 @@ export default function NoticeBoardPage() {
               <RefreshCw size={14} className={cn(refreshing && 'animate-spin')} />
               Refresh
             </button>
-            {canManage && (
+            {canManage && (isSuperAdmin || manageableDepartments.length > 0) && (
               <button
                 type="button"
                 onClick={() => setFormState({ open: true, notice: null })}
@@ -197,7 +220,7 @@ export default function NoticeBoardPage() {
                 ? 'Post the first announcement so everyone stays in the loop.'
                 : 'There are no notices in this category yet.'}
             </p>
-            {canManage && typeFilter === 'ALL' && (
+            {canManage && (isSuperAdmin || manageableDepartments.length > 0) && typeFilter === 'ALL' && (
               <button
                 type="button"
                 onClick={() => setFormState({ open: true, notice: null })}
@@ -220,11 +243,13 @@ export default function NoticeBoardPage() {
                     : null
                 }
                 onEdit={
-                  canManage
+                  canManageNotice(notice)
                     ? () => setFormState({ open: true, notice })
                     : undefined
                 }
-                onDelete={canManage ? () => setDeleteTarget(notice) : undefined}
+                onDelete={
+                  canManageNotice(notice) ? () => setDeleteTarget(notice) : undefined
+                }
               />
             ))}
           </div>
@@ -271,7 +296,8 @@ export default function NoticeBoardPage() {
         key={`${formState.open ? 'open' : 'closed'}-${formState.notice?.id ?? 'new'}`}
         open={formState.open}
         notice={formState.notice}
-        departments={departments}
+        departments={manageableDepartments}
+        allowCompanyWide={isSuperAdmin}
         onClose={() => setFormState({ open: false, notice: null })}
         onSuccess={() => loadNotices(false)}
       />

@@ -26,6 +26,7 @@ interface NoticeFormProps {
   open: boolean;
   notice?: Notice | null;
   departments: NoticeDepartment[];
+  allowCompanyWide?: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -37,13 +38,16 @@ export default function NoticeForm({
   open,
   notice,
   departments,
+  allowCompanyWide = false,
   onClose,
   onSuccess,
 }: NoticeFormProps) {
   const [title, setTitle] = useState(notice?.title ?? '');
   const [content, setContent] = useState(notice?.content ?? '');
   const [type, setType] = useState<NoticeType>(notice?.type ?? 'ANNOUNCEMENT');
-  const [departmentId, setDepartmentId] = useState(notice?.departmentId ?? 'ALL');
+  const [departmentId, setDepartmentId] = useState(
+    notice?.departmentId ?? (allowCompanyWide ? 'ALL' : departments[0]?.id ?? '')
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +58,11 @@ export default function NoticeForm({
 
     if (!trimmedTitle || !trimmedContent) {
       setError('Title and content are required.');
+      return;
+    }
+
+    if (!allowCompanyWide && (!departmentId || departmentId === 'ALL')) {
+      setError('Choose one of the departments you administer.');
       return;
     }
 
@@ -98,7 +107,9 @@ export default function NoticeForm({
         <DialogHeader>
           <DialogTitle>{notice ? 'Edit notice' : 'New notice'}</DialogTitle>
           <DialogDescription>
-            Publish an update to everyone or target a single department.
+            {allowCompanyWide
+              ? 'Publish an update to everyone or target a single department.'
+              : 'Publish an update to one of the departments you administer.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -157,7 +168,9 @@ export default function NoticeForm({
                   <SelectValue placeholder="All employees" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">All employees</SelectItem>
+                  {allowCompanyWide && (
+                    <SelectItem value="ALL">All employees</SelectItem>
+                  )}
                   {departments.map((department) => (
                     <SelectItem key={department.id} value={department.id}>
                       {department.name}

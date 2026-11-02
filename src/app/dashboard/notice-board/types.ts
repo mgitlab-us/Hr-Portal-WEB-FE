@@ -14,6 +14,9 @@ export interface Notice {
 export interface NoticeDepartment {
   id: string;
   name: string;
+  canManage?: boolean;
+  admin?: { id: string } | null;
+  admins?: { id: string }[];
 }
 
 export const NOTICE_TYPE_META: Record<

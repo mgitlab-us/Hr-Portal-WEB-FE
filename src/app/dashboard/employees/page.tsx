@@ -24,11 +24,17 @@ interface Employee {
   id: string;
   name: string;
   email: string;
-  role: 'EMPLOYEE' | 'ADMIN' | 'SUPER_ADMIN';
+  role: 'EMPLOYEE' | 'MANAGER' | 'ADMIN' | 'SUPER_ADMIN';
   isActive: boolean;
   createdAt: string;
   departmentId?: string | null;
-  department?: { id: string; name: string } | null;
+  department?: {
+    id: string;
+    name: string;
+    managers?: { employee: { id: string; name: string; email: string } }[];
+  } | null;
+  managerId?: string | null;
+  manager?: { id: string; name: string; email: string } | null;
   profile?: {
     employeeCode: string;
     designation: string;
@@ -37,10 +43,18 @@ interface Employee {
   };
 }
 
+interface PersonOption {
+  id: string;
+  name: string;
+  email: string;
+}
+
 interface Department {
   id: string;
   name: string;
-  admin?: { id: string; name: string; email: string } | null;
+  admin?: PersonOption | null;
+  admins?: PersonOption[];
+  managers?: PersonOption[];
 }
 
 interface ShiftProfile {
@@ -91,7 +105,13 @@ function RoleBadge({ role }: { role: Employee['role'] }) {
   if (role === 'ADMIN')
     return (
       <span className="inline-flex items-center text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
-        Admin
+        HR Admin
+      </span>
+    );
+  if (role === 'MANAGER')
+    return (
+      <span className="inline-flex items-center text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
+        Manager
       </span>
     );
   return (
@@ -124,7 +144,7 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
-  const [roleFilter, setRoleFilter] = useState<'ALL' | 'EMPLOYEE' | 'ADMIN'>('ALL');
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'EMPLOYEE' | 'MANAGER' | 'ADMIN'>('ALL');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -152,23 +172,29 @@ export default function EmployeesPage() {
   const [confirmModal, setConfirmModal] = useState<{ type: 'DEACTIVATE' | 'ARCHIVE'; id: string; name: string } | null>(null);
   const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
   const [payrollStatus, setPayrollStatus] = useState<PayrollStatusRecord[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
 
   const canManageEmployee = (emp: Employee) => {
     if (user?.role === 'SUPER_ADMIN') return true;
     if (user?.role === 'ADMIN') {
       const managedDepartmentIds = departments
-        .filter((d: Department) => d.admin?.id === user?.id)
+        .filter((d: Department) =>
+          (d.admins?.some((admin) => admin.id === user?.id) ?? false) ||
+          d.admin?.id === user?.id
+        )
         .map((d) => d.id);
       const employeeDepartmentId = emp.departmentId || emp.department?.id;
       return !!employeeDepartmentId && managedDepartmentIds.includes(employeeDepartmentId);
     }
+    // Reporting managers have read-only access to their team directory.
     return false;
   };
 
   const fetchEmployees = async () => {
     try {
       const res = await api.get('/employees');
-      setEmployees(res.data);
+      setEmployees(Array.isArray(res.data) ? res.data : (res.data?.data || []));
     } catch (err) {
       console.error('Failed to fetch employees:', err);
     } finally {
@@ -221,10 +247,13 @@ export default function EmployeesPage() {
 
   const roleOptions = useMemo(() => {
     const staff = scopedEmployees.filter((emp) => emp.role === 'EMPLOYEE').length;
+    const managers = scopedEmployees.filter((emp) => emp.role === 'MANAGER').length;
+    const admins = scopedEmployees.filter((emp) => emp.role === 'ADMIN').length;
     return [
       { label: 'All roles', value: 'ALL', count: scopedEmployees.length },
       { label: 'Employees', value: 'EMPLOYEE', count: staff },
-      { label: 'Admins', value: 'ADMIN', count: scopedEmployees.length - staff },
+      { label: 'Managers', value: 'MANAGER', count: managers },
+      { label: 'HR Admins', value: 'ADMIN', count: admins },
     ];
   }, [scopedEmployees]);
 
@@ -233,12 +262,16 @@ export default function EmployeesPage() {
       const matchesStatus =
         statusFilter === 'ALL' ||
         (statusFilter === 'ACTIVE' ? emp.isActive : !emp.isActive);
-      const matchesRole =
-        roleFilter === 'ALL' ||
-        (roleFilter === 'EMPLOYEE' ? emp.role === 'EMPLOYEE' : emp.role !== 'EMPLOYEE');
+      const matchesRole = roleFilter === 'ALL' || emp.role === roleFilter;
       return matchesStatus && matchesRole;
     });
   }, [scopedEmployees, statusFilter, roleFilter]);
+
+  const totalPages = Math.ceil(filteredEmployees.length / pageSize) || 1;
+  const paginatedEmployees = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredEmployees.slice(start, start + pageSize);
+  }, [filteredEmployees, currentPage, pageSize]);
 
   const hasActiveFilters =
     !!search || !!departmentFilter || statusFilter !== 'ALL' || roleFilter !== 'ALL';
@@ -362,13 +395,15 @@ export default function EmployeesPage() {
               {employees.length} total members
             </p>
           </div>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
-          >
-            <UserPlus size={14} />
-            Add Employee
-          </button>
+          {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
+            >
+              <UserPlus size={14} />
+              Add Employee
+            </button>
+          )}
         </div>
 
         {/* ── Table Card */}
@@ -383,12 +418,18 @@ export default function EmployeesPage() {
                   type="text"
                   placeholder="Search name, email or ID…"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-8 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                 />
                 {search && (
                   <button
-                    onClick={() => setSearch('')}
+                    onClick={() => {
+                      setSearch('');
+                      setCurrentPage(1);
+                    }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost rounded-md"
                   >
                     <X size={12} />
@@ -398,7 +439,10 @@ export default function EmployeesPage() {
               {departments.length > 0 && (
                 <Select
                   value={departmentFilter || 'ALL'}
-                  onValueChange={(value) => setDepartmentFilter(value === 'ALL' ? '' : value)}
+                  onValueChange={(value) => {
+                    setDepartmentFilter(value === 'ALL' ? '' : value);
+                    setCurrentPage(1);
+                  }}
                 >
                   <SelectTrigger className="h-9 w-[180px] rounded-lg border-slate-200 bg-slate-50 text-sm text-slate-700">
                     <SelectValue placeholder="All departments" />
@@ -420,13 +464,19 @@ export default function EmployeesPage() {
               <FilterChips
                 options={statusOptions}
                 value={statusFilter}
-                onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+                onChange={(value) => {
+                  setStatusFilter(value as typeof statusFilter);
+                  setCurrentPage(1);
+                }}
               />
               <div className="hidden h-4 w-px bg-slate-200 sm:block" />
               <FilterChips
                 options={roleOptions}
                 value={roleFilter}
-                onChange={(value) => setRoleFilter(value as typeof roleFilter)}
+                onChange={(value) => {
+                  setRoleFilter(value as typeof roleFilter);
+                  setCurrentPage(1);
+                }}
               />
               {hasActiveFilters && (
                 <button
@@ -436,6 +486,7 @@ export default function EmployeesPage() {
                     setDepartmentFilter('');
                     setStatusFilter('ALL');
                     setRoleFilter('ALL');
+                    setCurrentPage(1);
                   }}
                   className="ml-auto text-xs font-semibold text-slate-400 transition-colors hover:text-blue-600"
                 >
@@ -462,6 +513,7 @@ export default function EmployeesPage() {
                     setDepartmentFilter('');
                     setStatusFilter('ALL');
                     setRoleFilter('ALL');
+                    setCurrentPage(1);
                   }}
                   className="mt-2 text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
                 >
@@ -493,7 +545,7 @@ export default function EmployeesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {filteredEmployees.map((emp) => {
+                  {paginatedEmployees.map((emp) => {
                     const av = avatarColor(emp.name);
                     const isExpanded = expandedEmployeeId === emp.id;
                     return (
@@ -531,6 +583,17 @@ export default function EmployeesPage() {
                             <div className="mt-1">
                               <DepartmentBadge name={emp.department?.name || emp.profile?.department} />
                             </div>
+                            {(() => {
+                              const managers =
+                                emp.department?.managers?.map((row) => row.employee.name) ?? [];
+                              if (managers.length === 0) return null;
+                              return (
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                  Reporting manager{managers.length > 1 ? 's' : ''}:{' '}
+                                  {managers.join(', ')}
+                                </p>
+                              );
+                            })()}
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             {emp.isActive ? (
@@ -630,6 +693,37 @@ export default function EmployeesPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {filteredEmployees.length > pageSize && (
+            <div className="flex flex-wrap items-center justify-between border-t border-slate-100 px-5 py-3.5 bg-slate-50/50 text-xs">
+              <span className="text-slate-500">
+                Showing {(currentPage - 1) * pageSize + 1} to{' '}
+                {Math.min(currentPage * pageSize, filteredEmployees.length)} of{' '}
+                {filteredEmployees.length} employees
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                >
+                  Previous
+                </button>
+                <span className="px-2 text-slate-500 font-semibold">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -798,7 +892,10 @@ export default function EmployeesPage() {
                     >
                       <option value="EMPLOYEE">Employee</option>
                       {user?.role === 'SUPER_ADMIN' && (
-                        <option value="ADMIN">Admin (HR Manager)</option>
+                        <>
+                          <option value="MANAGER">Reporting Manager</option>
+                          <option value="ADMIN">HR Admin</option>
+                        </>
                       )}
                     </select>
                     <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -832,6 +929,15 @@ export default function EmployeesPage() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Reporting managers are assigned at the department level. */}
+              <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5">
+                <p className="text-xs font-medium text-blue-800">Reporting manager</p>
+                <p className="mt-0.5 text-[11px] text-blue-700/80">
+                  Managers are assigned to the department from the Departments page. Every manager
+                  assigned there can give first-stage leave and correction approval.
+                </p>
               </div>
 
               {/* Actions */}

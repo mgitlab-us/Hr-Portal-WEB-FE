@@ -17,6 +17,7 @@ import {
   Wrench,
   Megaphone,
   Wallet,
+  ScrollText,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
@@ -50,6 +51,7 @@ const baseNavItems: NavEntry[] = [
   { href: '/dashboard/notice-board', icon: Megaphone, label: 'Notice Board' },
   { href: '/dashboard/corrections', icon: FileCheck, label: 'Corrections' },
   { href: '/dashboard/leaves', icon: Plane, label: 'Leaves' },
+  { href: '/dashboard/audit-logs', icon: ScrollText, label: 'Audit Logs' },
   { href: '/dashboard/settings', icon: Wrench, label: 'Company Setup' },
 ];
 
@@ -59,8 +61,12 @@ const superAdminNavItems: NavEntry[] = [
 
 /**
  * Role-aware nav list, shared by the sidebar and the header quick-search.
- * SUPER_ADMIN monitors Attendance but doesn't handle Corrections or Leaves;
- * HR Manager (ADMIN) sees everything except Departments.
+ *
+ * - SUPER_ADMIN: company-wide control, including company setup and audit logs.
+ * - ADMIN (HR): cross-department employee reads, but payroll/rules/employee
+ *   writes are limited to assigned departments. Company setup stays hidden.
+ * - MANAGER: team reads plus leave/correction approvals. No payroll, rules,
+ *   audit logs, or company setup.
  */
 export function getNavItems(role?: string | null): NavEntry[] {
   if (role === 'SUPER_ADMIN') {
@@ -70,7 +76,25 @@ export function getNavItems(role?: string | null): NavEntry[] {
       ...baseNavItems.slice(2),
     ].filter((item) => !['Corrections', 'Leaves'].includes(item.label));
   }
-  return baseNavItems;
+
+  if (role === 'ADMIN') {
+    return [
+      ...baseNavItems.slice(0, 2),
+      ...superAdminNavItems,
+      ...baseNavItems.slice(2),
+    ].filter((item) => item.label !== 'Audit Logs' && item.label !== 'Company Setup');
+  }
+
+  if (role === 'MANAGER') {
+    return baseNavItems.filter((item) =>
+      ['Overview', 'Employees', 'Attendance', 'Analytics', 'Notice Board', 'Corrections', 'Leaves'].includes(
+        item.label
+      )
+    );
+  }
+
+  // Employees do not use the web console navigation.
+  return baseNavItems.filter((item) => item.label === 'Overview');
 }
 
 function isActivePath(pathname: string, href: string) {
