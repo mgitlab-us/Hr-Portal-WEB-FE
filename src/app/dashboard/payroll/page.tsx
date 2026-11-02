@@ -2,18 +2,23 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowUpDown,
   BadgeCheck,
+  Building2,
   CheckCircle2,
   Clock3,
   Download,
   Eye,
+  History,
   Loader2,
   PencilLine,
+  RotateCcw,
   Search,
   Users,
   Wallet,
 } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import SalaryLedgerDrawer from '@/components/payroll/SalaryLedgerDrawer';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -73,6 +78,9 @@ type BatchPayResult = {
   skippedCount?: number;
   skipped?: Array<{ reason?: string }>;
 };
+
+type StatusFilter = 'ALL' | 'PAID' | 'PENDING' | 'NO_STRUCTURE';
+type SortOption = 'name-asc' | 'name-desc' | 'salary-desc' | 'salary-asc' | 'code-asc';
 
 const errorMessage = (error: unknown, fallback: string) => {
   const err = error as { response?: { data?: { message?: string } } };
@@ -166,8 +174,12 @@ export default function PayrollPage() {
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
   const [rows, setRows] = useState<PayrollRow[]>([]);
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [sortBy, setSortBy] = useState<SortOption>('name-asc');
   const [selected, setSelected] = useState<string[]>([]);
   const [editRow, setEditRow] = useState<PayrollRow | null>(null);
   const [structureForm, setStructureForm] = useState<StructureForm>(emptyForm);
@@ -176,6 +188,16 @@ export default function PayrollPage() {
   const [payingId, setPayingId] = useState<string | null>(null);
   const [batching, setBatching] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [ledgerTarget, setLedgerTarget] = useState<PayrollRow | null>(null);
+
+  useEffect(() => {
+    api
+      .get('/departments')
+      .then((res) => {
+        setDepartments(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch(() => {});
+  }, []);
 
   const reloadPayroll = async () => {
     setLoading(true);
@@ -217,26 +239,76 @@ export default function PayrollPage() {
     };
   }, [month, year, toast]);
 
-  const filteredRows = useMemo(() => {
+  // Scoped list before status filtering so counter chips remain authoritative
+  const searchAndDeptFilteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return rows;
-    return rows.filter((row) =>
-      [row.name, row.email, row.employeeCode, row.designation, row.department]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query))
-    );
-  }, [rows, search]);
+    return rows.filter((row) => {
+      const matchesSearch =
+        !query ||
+        [row.name, row.email, row.employeeCode, row.designation, row.department]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query));
+
+      const matchesDept =
+        departmentFilter === 'ALL' ||
+        row.department === departmentFilter ||
+        departments.find((d) => d.id === departmentFilter)?.name === row.department;
+
+      return matchesSearch && matchesDept;
+    });
+  }, [rows, search, departmentFilter, departments]);
+
+  const filteredRows = useMemo(() => {
+    let list = searchAndDeptFilteredRows.filter((row) => {
+      if (statusFilter === 'PAID') return row.payment?.status === 'PAID';
+      if (statusFilter === 'PENDING') return row.payment?.status !== 'PAID' && row.hasStructure;
+      if (statusFilter === 'NO_STRUCTURE') return !row.hasStructure;
+      return true;
+    });
+
+    list = [...list].sort((a, b) => {
+      if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
+      if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
+      if (sortBy === 'salary-desc') {
+        const aVal = a.payment?.status === 'PAID' ? a.payment.netAmount : a.netSalary;
+        const bVal = b.payment?.status === 'PAID' ? b.payment.netAmount : b.netSalary;
+        return bVal - aVal;
+      }
+      if (sortBy === 'salary-asc') {
+        const aVal = a.payment?.status === 'PAID' ? a.payment.netAmount : a.netSalary;
+        const bVal = b.payment?.status === 'PAID' ? b.payment.netAmount : b.netSalary;
+        return aVal - bVal;
+      }
+      if (sortBy === 'code-asc') {
+        return (a.employeeCode || '').localeCompare(b.employeeCode || '');
+      }
+      return 0;
+    });
+
+    return list;
+  }, [searchAndDeptFilteredRows, statusFilter, sortBy]);
 
   const paidRows = rows.filter((row) => row.payment?.status === 'PAID');
   const pendingRows = rows.filter((row) => row.payment?.status !== 'PAID');
   const totalNet = rows.reduce((sum, row) => sum + Number(row.netSalary || 0), 0);
   const paidNet = paidRows.reduce((sum, row) => sum + Number(row.payment?.netAmount || 0), 0);
   const pendingNet = pendingRows.reduce((sum, row) => sum + Number(row.netSalary || 0), 0);
+
   const selectableRows = filteredRows.filter(
     (row) => row.payment?.status !== 'PAID' && row.hasStructure
   );
   const allVisibleSelected =
     selectableRows.length > 0 && selectableRows.every((row) => selected.includes(row.id));
+
+  const hasActiveFilters =
+    !!search || departmentFilter !== 'ALL' || statusFilter !== 'ALL' || sortBy !== 'name-asc';
+
+  const resetFilters = () => {
+    setSearch('');
+    setDepartmentFilter('ALL');
+    setStatusFilter('ALL');
+    setSortBy('name-asc');
+  };
 
   const formTotals = useMemo(() => {
     const value = (key: keyof SalaryStructure) => Math.max(0, Number(structureForm[key] || 0));
@@ -378,6 +450,15 @@ export default function PayrollPage() {
 
   const yearOptions = Array.from({ length: 6 }, (_, index) => today.getFullYear() - 3 + index);
 
+  // Status counts based on currently selected department and search
+  const statusCounts = useMemo(() => {
+    const list = searchAndDeptFilteredRows;
+    const paid = list.filter((r) => r.payment?.status === 'PAID').length;
+    const pending = list.filter((r) => r.payment?.status !== 'PAID' && r.hasStructure).length;
+    const noStructure = list.filter((r) => !r.hasStructure).length;
+    return { all: list.length, paid, pending, noStructure };
+  }, [searchAndDeptFilteredRows]);
+
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-slate-50 pb-16">
@@ -392,7 +473,7 @@ export default function PayrollPage() {
               </div>
               <h1 className="text-2xl font-semibold tracking-tight text-slate-800">Payroll</h1>
               <p className="mt-0.5 text-sm text-slate-400">
-                Review salary structures, generate branded payslips and record monthly payments.
+                Review salary structures, generate branded payslips, inspect payment ledgers, and record monthly payments.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
@@ -464,38 +545,169 @@ export default function PayrollPage() {
 
         <div className="px-6 pt-6 lg:px-8">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4">
-              <div className="relative min-w-[240px] flex-1">
-                <Search
-                  size={15}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search employee, code, department…"
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:bg-white"
-                />
+            {/* Filter Bar */}
+            <div className="border-b border-slate-100 p-4 sm:p-5 space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Search */}
+                <div className="relative min-w-[220px] flex-1">
+                  <Search
+                    size={15}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search by name, employee code, designation…"
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:bg-white transition-colors"
+                  />
+                </div>
+
+                {/* Department Selector */}
+                <div className="flex items-center gap-1.5 min-w-[170px]">
+                  <Building2 size={15} className="text-slate-400 flex-shrink-0" />
+                  <select
+                    value={departmentFilter}
+                    onChange={(e) => setDepartmentFilter(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-700 outline-none focus:border-blue-400"
+                  >
+                    <option value="ALL">All Departments</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.name}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sort Option */}
+                <div className="flex items-center gap-1.5 min-w-[170px]">
+                  <ArrowUpDown size={15} className="text-slate-400 flex-shrink-0" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-700 outline-none focus:border-blue-400"
+                  >
+                    <option value="name-asc">Sort: Name (A → Z)</option>
+                    <option value="name-desc">Sort: Name (Z → A)</option>
+                    <option value="salary-desc">Sort: Salary (High → Low)</option>
+                    <option value="salary-asc">Sort: Salary (Low → High)</option>
+                    <option value="code-asc">Sort: Employee Code</option>
+                  </select>
+                </div>
+
+                {/* Clear Filters Button */}
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                  >
+                    <RotateCcw size={12} />
+                    Reset
+                  </button>
+                )}
+
+                {/* Batch Mark Selected Paid Button */}
+                {selected.length > 0 && (
+                  <Button
+                    onClick={markSelectedPaid}
+                    disabled={batching}
+                    className="h-9 bg-blue-600 text-white hover:bg-blue-700 ml-auto"
+                  >
+                    {batching ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={14} />
+                    )}
+                    Mark {selected.length} paid
+                  </Button>
+                )}
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <span>{formatMonthYear(new Date(year, month - 1, 1))}</span>
-                <span className="text-slate-300">•</span>
-                <span>{filteredRows.length} result{filteredRows.length === 1 ? '' : 's'}</span>
-              </div>
-              {selected.length > 0 && (
-                <Button
-                  onClick={markSelectedPaid}
-                  disabled={batching}
-                  className="h-9 bg-blue-600 text-white hover:bg-blue-700"
+
+              {/* Status Filter Chips */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('ALL')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold transition-all ${
+                    statusFilter === 'ALL'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
                 >
-                  {batching ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <CheckCircle2 size={14} />
-                  )}
-                  Mark {selected.length} paid
-                </Button>
-              )}
+                  <span>All Employees</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      statusFilter === 'ALL' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {statusCounts.all}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('PAID')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold transition-all ${
+                    statusFilter === 'PAID'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  }`}
+                >
+                  <CheckCircle2 size={13} />
+                  <span>Paid</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      statusFilter === 'PAID' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'
+                    }`}
+                  >
+                    {statusCounts.paid}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('PENDING')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold transition-all ${
+                    statusFilter === 'PENDING'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                  }`}
+                >
+                  <Clock3 size={13} />
+                  <span>Pending Payment</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      statusFilter === 'PENDING' ? 'bg-amber-700 text-white' : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {statusCounts.pending}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('NO_STRUCTURE')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold transition-all ${
+                    statusFilter === 'NO_STRUCTURE'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                  }`}
+                >
+                  <span>No Structure Set</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      statusFilter === 'NO_STRUCTURE' ? 'bg-rose-700 text-white' : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    {statusCounts.noStructure}
+                  </span>
+                </button>
+
+                <div className="ml-auto text-xs text-slate-400 pl-2">
+                  Showing <span className="font-semibold text-slate-700">{filteredRows.length}</span> employee{filteredRows.length === 1 ? '' : 's'}
+                </div>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -532,10 +744,20 @@ export default function PayrollPage() {
                     <tr>
                       <td colSpan={7} className="px-4 py-16 text-center">
                         <Wallet size={28} className="mx-auto text-slate-300" />
-                        <p className="mt-2 text-sm font-medium text-slate-500">No employees found</p>
-                        <p className="text-xs text-slate-400">
-                          Try another month or clear the search filter.
+                        <p className="mt-2 text-sm font-medium text-slate-500">No employees match your filters</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Try adjusting search terms, department, or clearing the filter chips.
                         </p>
+                        {hasActiveFilters && (
+                          <button
+                            type="button"
+                            onClick={resetFilters}
+                            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                          >
+                            <RotateCcw size={12} />
+                            Reset All Filters
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ) : (
@@ -569,7 +791,9 @@ export default function PayrollPage() {
                                   {row.designation ? ` • ${row.designation}` : ''}
                                 </p>
                                 {row.department && (
-                                  <p className="truncate text-[11px] text-slate-400">{row.department}</p>
+                                  <p className="truncate text-[11px] text-slate-400 font-medium">
+                                    {row.department}
+                                  </p>
                                 )}
                               </div>
                             </div>
@@ -618,6 +842,18 @@ export default function PayrollPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-1">
+                              {/* Ledger Button */}
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                title="View payment ledger & historical payslips"
+                                onClick={() => setLedgerTarget(row)}
+                                className="text-slate-500 hover:bg-blue-50 hover:text-blue-700"
+                              >
+                                <History size={15} />
+                              </Button>
+
+                              {/* Preview Payslip Button */}
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
@@ -632,6 +868,8 @@ export default function PayrollPage() {
                                   <Eye size={15} />
                                 )}
                               </Button>
+
+                              {/* Edit Structure Button */}
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
@@ -641,11 +879,13 @@ export default function PayrollPage() {
                               >
                                 <PencilLine size={15} />
                               </Button>
+
+                              {/* Download or Mark Paid Button */}
                               {paid ? (
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  title="Download payslip"
+                                  title="Download payslip PDF"
                                   onClick={() => downloadPayslip(row)}
                                   className="text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                                 >
@@ -706,6 +946,7 @@ export default function PayrollPage() {
         </div>
       </div>
 
+      {/* Salary Structure Modal */}
       <Dialog open={!!editRow} onOpenChange={(open) => !open && setEditRow(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -790,6 +1031,7 @@ export default function PayrollPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Mark Paid Confirmation Modal */}
       <Dialog open={!!payTarget} onOpenChange={(open) => !open && setPayTarget(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -828,6 +1070,16 @@ export default function PayrollPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Salary Ledger Drawer */}
+      <SalaryLedgerDrawer
+        isOpen={!!ledgerTarget}
+        onClose={() => setLedgerTarget(null)}
+        employeeId={ledgerTarget?.id || null}
+        employeeName={ledgerTarget?.name}
+        employeeCode={ledgerTarget?.employeeCode}
+        departmentName={ledgerTarget?.department}
+      />
     </DashboardLayout>
   );
 }

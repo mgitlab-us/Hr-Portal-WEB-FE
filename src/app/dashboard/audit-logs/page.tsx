@@ -213,8 +213,9 @@ export default function AuditLogsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 pb-12">
-        {/* Header banner */}
+      <div className="p-6 lg:p-8">
+        <div className="max-w-[1440px] mx-auto space-y-6">
+          {/* Header banner */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
           <div>
             <div className="flex items-center gap-3">
@@ -493,6 +494,7 @@ export default function AuditLogsPage() {
           )}
         </div>
       </div>
+    </div>
 
       {/* Inspect Diff / Log Details Dialog */}
       <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>

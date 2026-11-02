@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  Building2, Plus, X, Loader2, Trash2, Pencil, Users, UserCog, ChevronDown,
+  Building2, Plus, X, Loader2, Trash2, Pencil, Users, UserCog,
   LayoutGrid, TableProperties, Settings2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -12,18 +12,21 @@ import { DepartmentOrgChart } from '@/components/departments/DepartmentOrgChart'
 import { useToast } from '@/components/ui/toast';
 import { useRouter } from 'next/navigation';
 
-interface Department {
-  id: string;
-  name: string;
-  adminId: string | null;
-  admin: { id: string; name: string; email: string } | null;
-  _count: { employees: number };
-}
-
-interface AdminOption {
+interface PersonOption {
   id: string;
   name: string;
   email: string;
+}
+
+interface Department {
+  id: string;
+  name: string;
+  adminId?: string | null;
+  admin?: PersonOption | null;
+  admins: PersonOption[];
+  managers: PersonOption[];
+  canManage?: boolean;
+  _count: { employees: number };
 }
 
 
@@ -32,19 +35,26 @@ export default function DepartmentsPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [admins, setAdmins] = useState<AdminOption[]>([]);
+  const [admins, setAdmins] = useState<PersonOption[]>([]);
+  const [managers, setManagers] = useState<PersonOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; dept?: Department } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
-  const [form, setForm] = useState({ name: '', adminId: '' });
+  const [form, setForm] = useState<{ name: string; adminIds: string[]; managerIds: string[] }>({
+    name: '',
+    adminIds: [],
+    managerIds: [],
+  });
   const [view, setView] = useState<'chart' | 'table'>('chart');
+  const canEditDepartments = user?.role === 'SUPER_ADMIN';
+  const canOpenPage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
   useEffect(() => {
-    if (user && user.role !== 'SUPER_ADMIN') {
+    if (user && !canOpenPage) {
       router.replace('/dashboard');
     }
-  }, [user, router]);
+  }, [user, router, canOpenPage]);
 
   const fetchData = async () => {
     try {
@@ -61,6 +71,11 @@ export default function DepartmentsPage() {
           .filter((e) => e.role === 'ADMIN')
           .map((e) => ({ id: e.id, name: e.name, email: e.email }))
       );
+      setManagers(
+        empList
+          .filter((e) => e.role === 'MANAGER')
+          .map((e) => ({ id: e.id, name: e.name, email: e.email }))
+      );
     } catch (err) {
       console.error('Failed to fetch departments:', err);
     } finally {
@@ -69,20 +84,36 @@ export default function DepartmentsPage() {
   };
 
   useEffect(() => {
-    if (user?.role === 'SUPER_ADMIN' && !user?.mustChangePassword) {
+    if (canOpenPage && !user?.mustChangePassword) {
       const init = async () => { await fetchData(); };
       init();
     }
-  }, [user]);
+  }, [user, canOpenPage]);
 
   const openCreate = () => {
-    setForm({ name: '', adminId: '' });
+    setForm({ name: '', adminIds: [], managerIds: [] });
     setModal({ mode: 'create' });
   };
 
   const openEdit = (dept: Department) => {
-    setForm({ name: dept.name, adminId: dept.adminId || '' });
+    setForm({
+      name: dept.name,
+      adminIds: dept.admins?.map((admin) => admin.id) || (dept.adminId ? [dept.adminId] : []),
+      managerIds: dept.managers?.map((manager) => manager.id) || [],
+    });
     setModal({ mode: 'edit', dept });
+  };
+
+  const toggleId = (field: 'adminIds' | 'managerIds', id: string) => {
+    setForm((previous) => {
+      const values = previous[field];
+      return {
+        ...previous,
+        [field]: values.includes(id)
+          ? values.filter((value) => value !== id)
+          : [...values, id],
+      };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -92,15 +123,13 @@ export default function DepartmentsPage() {
     try {
       const payload = {
         name: form.name.trim(),
-        adminId: form.adminId || undefined,
+        adminIds: form.adminIds,
+        managerIds: form.managerIds,
       };
       if (modal?.mode === 'create') {
         await api.post('/departments', payload);
       } else if (modal?.dept) {
-        await api.patch(`/departments/${modal.dept.id}`, {
-          name: payload.name,
-          adminId: form.adminId || null,
-        });
+        await api.patch(`/departments/${modal.dept.id}`, payload);
       }
       setModal(null);
       fetchData();
@@ -129,7 +158,7 @@ export default function DepartmentsPage() {
     }
   };
 
-  if (user?.role !== 'SUPER_ADMIN') {
+  if (!canOpenPage) {
     return null;
   }
 
@@ -140,7 +169,9 @@ export default function DepartmentsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Departments</h1>
             <p className="text-sm text-slate-400 mt-0.5">
-              Create departments and assign HR admins to manage them
+              {canEditDepartments
+                ? 'Create departments, assign HR admins, and assign reporting managers'
+                : 'View every department. Rules are editable only for departments you administer.'}
             </p>
           </div>
           <div className="flex items-center flex-wrap gap-2">
@@ -174,13 +205,15 @@ export default function DepartmentsPage() {
               <Settings2 size={14} />
               Department Setup
             </button>
-            <button
-              onClick={openCreate}
-              className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
-            >
-              <Plus size={14} />
-              Add Department
-            </button>
+            {canEditDepartments && (
+              <button
+                onClick={openCreate}
+                className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
+              >
+                <Plus size={14} />
+                Add Department
+              </button>
+            )}
           </div>
         </div>
 
@@ -193,14 +226,17 @@ export default function DepartmentsPage() {
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Building2 size={28} className="mb-3 text-slate-300" />
               <p className="text-sm">No departments yet</p>
-              <button onClick={openCreate} className="mt-3 text-xs font-semibold btn-ghost rounded-md">
-                Create your first department
-              </button>
+              {canEditDepartments && (
+                <button onClick={openCreate} className="mt-3 text-xs font-semibold btn-ghost rounded-md">
+                  Create your first department
+                </button>
+              )}
             </div>
           ) : view === 'chart' ? (
             <DepartmentOrgChart
-            companyName={user?.company?.name || 'Organisation'}
+              companyName={user?.company?.name || 'Organisation'}
               departments={departments}
+              canEdit={canEditDepartments}
               onAddDepartment={openCreate}
               onEditDepartment={openEdit}
               onDeleteDepartment={setDeleteTarget}
@@ -214,7 +250,10 @@ export default function DepartmentsPage() {
                       Department
                     </th>
                     <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                      HR Admin
+                      HR Admins
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                      Reporting Managers
                     </th>
                     <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
                       Employees
@@ -234,18 +273,41 @@ export default function DepartmentsPage() {
                         </div>
                       </td>
                       <td className="px-5 py-3.5">
-                        {dept.admin ? (
-                          <div>
-                            <p className="text-sm text-slate-700 flex items-center gap-1.5">
-                              <UserCog size={12} className="text-slate-400" />
-                              {dept.admin.name}
-                            </p>
-                            <p className="text-xs text-slate-400 mt-0.5">{dept.admin.email}</p>
+                        {dept.admins.length > 0 ? (
+                          <div className="space-y-1">
+                            {dept.admins.map((admin) => (
+                              <div key={admin.id}>
+                                <p className="text-sm text-slate-700 flex items-center gap-1.5">
+                                  <UserCog size={12} className="text-slate-400" />
+                                  {admin.name}
+                                </p>
+                                <p className="text-xs text-slate-400 mt-0.5">{admin.email}</p>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <span className="text-xs text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">
-                            No admin assigned
+                            No HR admin assigned
                           </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {dept.managers.length > 0 ? (
+                          <div className="space-y-1">
+                            {dept.managers.map((manager) => (
+                              <div key={manager.id}>
+                                <p className="text-sm text-slate-700">{manager.name}</p>
+                                <p className="text-xs text-slate-400 mt-0.5">{manager.email}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-500 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
+                            No reporting manager
+                          </span>
+                        )}
+                        {dept.canManage === false && user?.role === 'ADMIN' && (
+                          <p className="mt-1 text-[10px] text-slate-400">Read-only for you</p>
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-center">
@@ -255,20 +317,22 @@ export default function DepartmentsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openEdit(dept)}
-                            className="p-1.5 btn-ghost rounded-md"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(dept)}
-                            className="p-1.5 btn-danger-ghost rounded-md"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                        {canEditDepartments && (
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => openEdit(dept)}
+                              className="p-1.5 btn-ghost rounded-md"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(dept)}
+                              className="p-1.5 btn-danger-ghost rounded-md"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -304,26 +368,70 @@ export default function DepartmentsPage() {
                   className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-slate-600">HR Admin (optional)</label>
-                <div className="relative">
-                  <select
-                    value={form.adminId}
-                    onChange={(e) => setForm((p) => ({ ...p, adminId: e.target.value }))}
-                    className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                  >
-                    <option value="">Unassigned</option>
-                    {admins.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} ({a.email})
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-slate-600">HR admins</label>
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/60 p-2">
+                    {admins.length === 0 ? (
+                      <p className="px-2 py-1 text-[11px] text-slate-400">
+                        No employees with the ADMIN role yet.
+                      </p>
+                    ) : (
+                      admins.map((admin) => (
+                        <label
+                          key={admin.id}
+                          className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-white"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.adminIds.includes(admin.id)}
+                            onChange={() => toggleId('adminIds', admin.id)}
+                            className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">{admin.name}</span>
+                            <span className="block truncate text-[10px] text-slate-400">{admin.email}</span>
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Multiple HR admins can share a department. They can read employees company-wide but edit only their assigned departments.
+                  </p>
                 </div>
-                <p className="text-[10px] text-slate-400">
-                  This admin will receive attendance notifications and see live pulse for this department only.
-                </p>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-slate-600">Reporting managers</label>
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/60 p-2">
+                    {managers.length === 0 ? (
+                      <p className="px-2 py-1 text-[11px] text-slate-400">
+                        No employees with the MANAGER role yet.
+                      </p>
+                    ) : (
+                      managers.map((manager) => (
+                        <label
+                          key={manager.id}
+                          className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-white"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.managerIds.includes(manager.id)}
+                            onChange={() => toggleId('managerIds', manager.id)}
+                            className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">{manager.name}</span>
+                            <span className="block truncate text-[10px] text-slate-400">{manager.email}</span>
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Every manager assigned here can give first-stage approval for anyone in this department.
+                  </p>
+                </div>
               </div>
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button

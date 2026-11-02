@@ -37,6 +37,8 @@ interface Department {
   name: string;
   adminId: string | null;
   admin: { id: string; name: string; email: string } | null;
+  admins?: { id: string; name: string; email: string }[];
+  canManage?: boolean;
   _count: { employees: number };
 }
 
@@ -237,7 +239,12 @@ export default function DepartmentConfigPanel({
 
   const manageableDepartments = useMemo(() => {
     if (user?.role === 'SUPER_ADMIN') return departments;
-    return departments.filter((department) => department.admin?.id === user?.id);
+    return departments.filter(
+      (department) =>
+        department.canManage ||
+        department.admins?.some((admin) => admin.id === user?.id) ||
+        department.admin?.id === user?.id
+    );
   }, [departments, user?.id, user?.role]);
 
   const activeDepartment = useMemo(() => {

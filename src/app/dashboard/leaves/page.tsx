@@ -16,10 +16,14 @@ import {
   Paperclip,
   Download,
   ListChecks,
+  Search,
+  Building2,
+  RotateCcw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDateDMY, formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { useAuthStore } from '@/store/authStore';
 import FilterChips from '@/components/filters/FilterChips';
 import { useToast } from '@/components/ui/toast';
 
@@ -155,6 +159,9 @@ function monthBounds(cursor: Date) {
 
 export default function LeavesPage() {
   const { toast } = useToast();
+  const { user } = useAuthStore();
+  const isManager = user?.role === 'MANAGER';
+  const canUseHrQueue = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const [tab, setTab] = useState<PageTab>('approvals');
   const [queue, setQueue] = useState<ApprovalQueue>('MANAGER');
   const [managerRequests, setManagerRequests] = useState<LeaveRequest[]>([]);
@@ -166,6 +173,9 @@ export default function LeavesPage() {
     return new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
   });
   const [typeFilter, setTypeFilter] = useState<LeaveTypeFilter>('ALL');
+  const [search, setSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('ALL');
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
@@ -203,6 +213,7 @@ export default function LeavesPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchQueues();
+    api.get('/departments').then((res) => setDepartments(Array.isArray(res.data) ? res.data : [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -279,6 +290,29 @@ export default function LeavesPage() {
       ? activeRequests
       : activeRequests.filter((request) => normalizeLeaveType(request.type) === typeFilter);
 
+  const hasActiveFilters = !!search || departmentFilter !== 'ALL' || typeFilter !== 'ALL';
+  const resetFilters = () => {
+    setSearch('');
+    setDepartmentFilter('ALL');
+    setTypeFilter('ALL');
+  };
+
+  const filteredVisibleRequests = visibleRequests.filter((request) => {
+    const q = search.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      request.employee.name.toLowerCase().includes(q) ||
+      (request.employee.profile?.employeeCode &&
+        request.employee.profile.employeeCode.toLowerCase().includes(q)) ||
+      request.reason.toLowerCase().includes(q);
+    const matchesDept =
+      departmentFilter === 'ALL' ||
+      request.employee.profile?.department === departmentFilter ||
+      departments.find((d) => d.id === departmentFilter)?.name ===
+        request.employee.profile?.department;
+    return matchesSearch && matchesDept;
+  });
+
   const calendarCells = useMemo(() => {
     const year = monthCursor.getUTCFullYear();
     const month = monthCursor.getUTCMonth();
@@ -328,7 +362,7 @@ export default function LeavesPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-[11px] font-bold text-[#5B6FA8] uppercase tracking-wider mb-1">
-              Admin · Leave Requests
+              {isManager ? 'Manager' : 'Admin'} · Leave Requests
             </p>
             <h1 className="text-2xl font-bold text-ink tracking-tight">
               Leave Management
@@ -393,20 +427,22 @@ export default function LeavesPage() {
               >
                 My team · {managerRequests.length}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setQueue('HR');
-                  setTypeFilter('ALL');
-                }}
-                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                  queue === 'HR'
-                    ? 'border-blue-200 bg-blue-50 text-blue-700'
-                    : 'border-line bg-white text-slate-500 hover:border-slate-300'
-                }`}
-              >
-                HR final approval · {hrRequests.length}
-              </button>
+              {canUseHrQueue && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQueue('HR');
+                    setTypeFilter('ALL');
+                  }}
+                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                    queue === 'HR'
+                      ? 'border-blue-200 bg-blue-50 text-blue-700'
+                      : 'border-line bg-white text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  HR final approval · {hrRequests.length}
+                </button>
+              )}
               <span className="ml-auto text-[11px] font-medium text-slate-400">
                 {queue === 'MANAGER'
                   ? 'Manager approval moves the request to HR.'
@@ -415,12 +451,52 @@ export default function LeavesPage() {
             </div>
 
             {!loading && activeRequests.length > 0 && (
-              <div className="rounded-xl border border-line bg-white px-4 py-3 shadow-2xs">
-                <FilterChips
-                  options={typeOptions}
-                  value={typeFilter}
-                  onChange={(value) => setTypeFilter(value as LeaveTypeFilter)}
-                />
+              <div className="rounded-xl border border-line bg-white px-4 py-3 shadow-2xs space-y-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative flex-1 min-w-[220px]">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search employee name, code, reason…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 pl-9 pr-3 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-400"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 min-w-[170px]">
+                    <Building2 size={14} className="text-slate-400 flex-shrink-0" />
+                    <select
+                      value={departmentFilter}
+                      onChange={(e) => setDepartmentFilter(e.target.value)}
+                      className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-400"
+                    >
+                      <option value="ALL">All Departments</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                      <RotateCcw size={12} />
+                      Reset
+                    </button>
+                  )}
+                </div>
+                <div className="pt-2 border-t border-slate-50 flex items-center justify-between flex-wrap gap-2">
+                  <FilterChips
+                    options={typeOptions}
+                    value={typeFilter}
+                    onChange={(value) => setTypeFilter(value as LeaveTypeFilter)}
+                  />
+                  <span className="text-xs text-slate-400">
+                    Showing <span className="font-semibold text-slate-700">{filteredVisibleRequests.length}</span> request{filteredVisibleRequests.length === 1 ? '' : 's'}
+                  </span>
+                </div>
               </div>
             )}
 
@@ -441,7 +517,7 @@ export default function LeavesPage() {
                     : 'No leave requests are waiting for HR final approval.'}
                 </p>
               </div>
-            ) : visibleRequests.length === 0 ? (
+            ) : filteredVisibleRequests.length === 0 ? (
               <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-100 bg-white p-16 text-center">
                 <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
                   <Plane size={18} className="text-blue-500" />
@@ -457,7 +533,7 @@ export default function LeavesPage() {
               </div>
             ) : (
               <div className="space-y-3.5">
-                {visibleRequests.map((req) => {
+                {filteredVisibleRequests.map((req) => {
                   const color = avatarColor(req.employee.name);
                   const isProcessing = processingId === req.id;
                   const isManagerStage = req.approvalStage === 'MANAGER';

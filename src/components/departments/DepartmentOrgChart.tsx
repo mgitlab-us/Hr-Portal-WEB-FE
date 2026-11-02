@@ -6,14 +6,18 @@ import { Building2, Plus, Pencil, Trash2, UserCog, Users } from 'lucide-react';
 interface Department {
   id: string;
   name: string;
-  adminId: string | null;
-  admin: { id: string; name: string; email: string } | null;
+  adminId?: string | null;
+  admin?: { id: string; name: string; email: string } | null;
+  admins: { id: string; name: string; email: string }[];
+  managers: { id: string; name: string; email: string }[];
+  canManage?: boolean;
   _count: { employees: number };
 }
 
 interface DepartmentOrgChartProps {
   companyName: string;
   departments: Department[];
+  canEdit?: boolean;
   onAddDepartment: () => void;
   onEditDepartment: (dept: Department) => void;
   onDeleteDepartment: (dept: Department) => void;
@@ -22,6 +26,7 @@ interface DepartmentOrgChartProps {
 export function DepartmentOrgChart({
   companyName,
   departments,
+  canEdit = true,
   onAddDepartment,
   onEditDepartment,
   onDeleteDepartment,
@@ -58,14 +63,23 @@ export function DepartmentOrgChart({
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-slate-700 truncate">{dept.name}</p>
-                          {dept.admin ? (
+                          {((dept.admins?.length ?? 0) > 0 || dept.admin) ? (
                             <p className="text-[11px] text-slate-400 truncate flex items-center gap-1">
                               <UserCog size={10} className="flex-shrink-0" />
-                              <span className="truncate">{dept.admin.name}</span>
+                              <span className="truncate">
+                                {dept.admins?.[0]?.name || dept.admin?.name}
+                                {(dept.admins?.length ?? 0) > 1
+                                  ? ` +${(dept.admins?.length ?? 1) - 1}`
+                                  : ''}
+                              </span>
                             </p>
                           ) : (
-                            <p className="text-[11px] text-amber-600">Unassigned</p>
+                            <p className="text-[11px] text-amber-600">No HR admin</p>
                           )}
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {dept.managers?.length ?? 0} reporting manager
+                            {(dept.managers?.length ?? 0) === 1 ? '' : 's'}
+                          </p>
                         </div>
                       </div>
 
@@ -75,37 +89,41 @@ export function DepartmentOrgChart({
                       </span>
 
                       {/* Hover actions */}
-                      <div className="absolute -top-2.5 -right-2.5 hidden group-hover:flex items-center gap-1">
-                        <button
-                          onClick={() => onEditDepartment(dept)}
-                          className="p-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 rounded-full shadow-sm transition-colors"
-                          aria-label={`Edit ${dept.name}`}
-                        >
-                          <Pencil size={11} />
-                        </button>
-                        <button
-                          onClick={() => onDeleteDepartment(dept)}
-                          className="p-1.5 bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-full shadow-sm transition-colors"
-                          aria-label={`Delete ${dept.name}`}
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                      {canEdit && (
+                        <div className="absolute -top-2.5 -right-2.5 hidden group-hover:flex items-center gap-1">
+                          <button
+                            onClick={() => onEditDepartment(dept)}
+                            className="p-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 rounded-full shadow-sm transition-colors"
+                            aria-label={`Edit ${dept.name}`}
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            onClick={() => onDeleteDepartment(dept)}
+                            className="p-1.5 bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-full shadow-sm transition-colors"
+                            aria-label={`Delete ${dept.name}`}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </li>
                 ))}
 
                 {/* Add-department node — lives in the same row, as a branch of the tree */}
-                <li>
-                  <button
-                    type="button"
-                    onClick={onAddDepartment}
-                    className="inline-flex flex-col items-center justify-center gap-1.5 px-3 py-3 sm:px-4 sm:py-3.5 rounded-xl border border-dashed border-blue-300 bg-blue-50 text-blue-700 hover:border-blue-400 hover:bg-blue-100 transition-colors min-w-[150px] sm:min-w-[200px] min-h-[68px] sm:min-h-[76px]"
-                  >
-                    <Plus size={16} />
-                    <span className="text-xs font-medium">Add department</span>
-                  </button>
-                </li>
+                {canEdit && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={onAddDepartment}
+                      className="inline-flex flex-col items-center justify-center gap-1.5 px-3 py-3 sm:px-4 sm:py-3.5 rounded-xl border border-dashed border-blue-300 bg-blue-50 text-blue-700 hover:border-blue-400 hover:bg-blue-100 transition-colors min-w-[150px] sm:min-w-[200px] min-h-[68px] sm:min-h-[76px]"
+                    >
+                      <Plus size={16} />
+                      <span className="text-xs font-medium">Add department</span>
+                    </button>
+                  </li>
+                )}
               </ul>
             )}
           </li>

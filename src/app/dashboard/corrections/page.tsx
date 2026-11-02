@@ -1,12 +1,13 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import {
-  CheckCircle2, MessageSquare, ChevronRight, Loader2, Calendar, Check, X, ArrowRight,
+  CheckCircle2, MessageSquare, ChevronRight, Loader2, Calendar, Check, X, ArrowRight, Search, Building2, RotateCcw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDayMonth, formatTime12h, formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useToast } from '@/components/ui/toast';
+import { useAuthStore } from '@/store/authStore';
 
 interface CorrectionRequest {
   id: string;
@@ -20,7 +21,8 @@ interface CorrectionRequest {
   createdAt: string;
   employee: {
     name: string;
-    profile?: { designation: string };
+    profile?: { designation: string; department?: string };
+    department?: { name: string };
   };
   attendanceRecord: { date: string };
 }
@@ -187,11 +189,17 @@ function CorrectionCard({
 
 export default function CorrectionsPage() {
   const { toast } = useToast();
+  const { user } = useAuthStore();
+  const isManager = user?.role === 'MANAGER';
+  const canUseHrQueue = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const [managerRequests, setManagerRequests] = useState<CorrectionRequest[]>([]);
   const [hrRequests, setHrRequests] = useState<CorrectionRequest[]>([]);
   const [queue, setQueue] = useState<'MANAGER' | 'HR'>('MANAGER');
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('ALL');
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
 
   const fetchRequests = async () => {
     try {
@@ -211,6 +219,7 @@ export default function CorrectionsPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRequests();
+    api.get('/departments').then((res) => setDepartments(Array.isArray(res.data) ? res.data : [])).catch(() => {});
   }, []);
 
   const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
@@ -231,7 +240,27 @@ export default function CorrectionsPage() {
     }
   };
 
-  const requests = queue === 'MANAGER' ? managerRequests : hrRequests;
+  const rawRequests = queue === 'MANAGER' ? managerRequests : hrRequests;
+  const hasActiveFilters = !!search || departmentFilter !== 'ALL';
+  const resetFilters = () => {
+    setSearch('');
+    setDepartmentFilter('ALL');
+  };
+
+  const requests = rawRequests.filter((req) => {
+    const q = search.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      req.employee.name.toLowerCase().includes(q) ||
+      (req.employee.profile?.designation &&
+        req.employee.profile.designation.toLowerCase().includes(q)) ||
+      req.reason.toLowerCase().includes(q);
+    const matchesDept =
+      departmentFilter === 'ALL' ||
+      req.employee.department?.name === departmentFilter ||
+      req.employee.profile?.department === departmentFilter;
+    return matchesSearch && matchesDept;
+  });
   const totalPending = managerRequests.length + hrRequests.length;
 
   return (
@@ -242,7 +271,7 @@ export default function CorrectionsPage() {
         <div className="flex flex-col xs:flex-row xs:items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-              Admin · Corrections
+              {isManager ? 'Manager' : 'Admin'} · Corrections
             </p>
             <h1 className="text-xl sm:text-2xl font-semibold text-slate-800 tracking-tight leading-tight">
               Correction Center
@@ -273,23 +302,68 @@ export default function CorrectionsPage() {
           >
             My team · {managerRequests.length}
           </button>
-          <button
-            type="button"
-            onClick={() => setQueue('HR')}
-            className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-              queue === 'HR'
-                ? 'border-blue-200 bg-blue-50 text-blue-700'
-                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-            }`}
-          >
-            HR final approval · {hrRequests.length}
-          </button>
+          {canUseHrQueue && (
+            <button
+              type="button"
+              onClick={() => setQueue('HR')}
+              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                queue === 'HR'
+                  ? 'border-blue-200 bg-blue-50 text-blue-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+              }`}
+            >
+              HR final approval · {hrRequests.length}
+            </button>
+          )}
           <span className="ml-auto text-[11px] text-slate-400">
             {queue === 'MANAGER'
               ? 'Manager approval moves the correction to HR.'
               : 'HR approval is final and updates attendance.'}
           </span>
         </div>
+
+        {!loading && rawRequests.length > 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search staff name, designation or reason…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 pl-9 pr-3 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-400"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 min-w-[170px]">
+                <Building2 size={14} className="text-slate-400 flex-shrink-0" />
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => setDepartmentFilter(e.target.value)}
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-400"
+                >
+                  <option value="ALL">All Departments</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  <RotateCcw size={12} />
+                  Reset
+                </button>
+              )}
+              <span className="ml-auto text-xs text-slate-400">
+                Showing <span className="font-semibold text-slate-700">{requests.length}</span> request{requests.length === 1 ? '' : 's'}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         {loading ? (

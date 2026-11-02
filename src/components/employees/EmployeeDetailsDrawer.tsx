@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { formatLongDateDMY, formatMonthYear } from '@/lib/datetime';
 import DesignationSelect from '@/components/employees/DesignationSelect';
 import EmployeeDocumentsTab from '@/components/employees/EmployeeDocumentsTab';
+import SalaryLedgerDrawer from '@/components/payroll/SalaryLedgerDrawer';
 import { useToast } from '@/components/ui/toast';
 import { useAuthStore } from '@/store/authStore';
 
@@ -18,10 +19,15 @@ interface Employee {
   id: string;
   name: string;
   email: string;
-  role: 'EMPLOYEE' | 'ADMIN' | 'SUPER_ADMIN';
+  role: 'EMPLOYEE' | 'MANAGER' | 'ADMIN' | 'SUPER_ADMIN';
   isActive: boolean;
   createdAt: string;
   departmentId?: string | null;
+  department?: {
+    id: string;
+    name: string;
+    managers?: { employee: { id: string; name: string; email: string } }[];
+  } | null;
   shiftProfileId?: string | null;
   managerId?: string | null;
   manager?: { id: string; name: string; email: string } | null;
@@ -76,10 +82,10 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [shifts, setShifts] = useState<ShiftOption[]>([]);
-  const [managerOptions, setManagerOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [showLedgerDrawer, setShowLedgerDrawer] = useState(false);
 
   const [editInfo, setEditInfo] = useState({
     baseSalary: '',
@@ -90,36 +96,23 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
     phone: '',
     joiningDate: '',
     departmentId: '',
-    shiftProfileId: '',
-    managerId: ''
+    shiftProfileId: ''
   });
 
   const fetchData = async () => {
     setLoading(true);
     setIsEditing(false);
     try {
-      const [empRes, salaryRes, deptsRes, shiftsRes, employeesRes] = await Promise.all([
+      const [empRes, salaryRes, deptsRes, shiftsRes] = await Promise.all([
         api.get(`/employees/${employeeId}`),
         api.get(`/salary/${employeeId}/history`).catch(() => ({ data: [] })),
         api.get('/departments').catch(() => ({ data: [] })),
-        api.get('/shifts').catch(() => ({ data: [] })),
-        api.get('/employees').catch(() => ({ data: [] }))
+        api.get('/shifts').catch(() => ({ data: [] }))
       ]);
       setEmployee(empRes.data);
       setPayments(salaryRes.data || []);
       setDepartments(deptsRes.data || []);
       setShifts(shiftsRes.data || []);
-      const employeeList = Array.isArray(employeesRes.data)
-        ? employeesRes.data
-        : (employeesRes.data?.data || []);
-      setManagerOptions(
-        employeeList
-          .filter((employee: { id: string; isActive: boolean }) => employee.isActive)
-          .map((employee: { id: string; name: string }) => ({
-            id: employee.id,
-            name: employee.name,
-          }))
-      );
 
       const p = empRes.data.profile;
       setEditInfo({
@@ -131,8 +124,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         phone: p?.phone || '',
         joiningDate: p?.joiningDate ? String(p.joiningDate).slice(0, 10) : '',
         departmentId: empRes.data.departmentId || '',
-        shiftProfileId: empRes.data.shiftProfileId || '',
-        managerId: empRes.data.managerId || ''
+        shiftProfileId: empRes.data.shiftProfileId || ''
       });
     } catch {
       console.error('Failed to load employee details');
@@ -175,8 +167,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         phone: p?.phone || '',
         joiningDate: p?.joiningDate ? String(p.joiningDate).slice(0, 10) : '',
         departmentId: employee.departmentId || '',
-        shiftProfileId: employee.shiftProfileId || '',
-        managerId: employee.managerId || ''
+        shiftProfileId: employee.shiftProfileId || ''
       });
     }
     setIsEditing(false);
@@ -188,7 +179,6 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
     try {
       const payload: Record<string, unknown> = {
         departmentId: editInfo.departmentId || null,
-        managerId: editInfo.managerId || null,
         bankName: editInfo.bankName.trim() || undefined,
         accountNumber: editInfo.accountNumber.trim() || undefined
       };
@@ -433,11 +423,13 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                         <DetailItem icon={ShieldCheck} label="System Role" value={employee?.role ? employee.role.replace('_', ' ') : '—'} />
                         <DetailItem
                           icon={ShieldCheck}
-                          label="Reports To"
+                          label="Department Managers"
                           value={
-                            employee?.manager?.name ||
-                            managerOptions.find((manager) => manager.id === editInfo.managerId)?.name ||
-                            'No direct manager'
+                            (employee?.department?.managers?.length ?? 0) > 0
+                              ? employee!.department!.managers!
+                                  .map((row) => row.employee.name)
+                                  .join(', ')
+                              : 'No reporting manager assigned'
                           }
                         />
                       </div>
@@ -640,27 +632,6 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                           </div>
 
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Reports To</label>
-                            <select
-                              value={editInfo.managerId}
-                              onChange={e =>
-                                setEditInfo(p => ({ ...p, managerId: e.target.value }))
-                              }
-                              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
-                            >
-                              <option value="">No direct manager</option>
-                              {managerOptions
-                                .filter((manager) => manager.id !== employeeId)
-                                .map((manager) => (
-                                  <option key={manager.id} value={manager.id}>{manager.name}</option>
-                                ))}
-                            </select>
-                            <p className="text-[10px] text-slate-400">
-                              Requests go to this manager first, then HR.
-                            </p>
-                          </div>
-
-                          <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Shift Profile</label>
                             {!isSuperAdmin ? (
                               <div className="w-full rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-sm text-blue-700">
@@ -769,6 +740,15 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                     transition={{ duration: 0.15 }}
                     className="space-y-5"
                   >
+                    <button
+                      type="button"
+                      onClick={() => setShowLedgerDrawer(true)}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 hover:bg-blue-100/80 border border-blue-200 text-blue-800 text-xs font-bold rounded-xl transition-colors shadow-2xs cursor-pointer"
+                    >
+                      <History size={14} className="text-blue-600" />
+                      <span>View Full Payment Ledger & Historical Payslips</span>
+                    </button>
+
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 flex items-center justify-between">
                       <div>
                         <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">
@@ -862,6 +842,14 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
             </>
           )}
         </div>
+        <SalaryLedgerDrawer
+          isOpen={showLedgerDrawer}
+          onClose={() => setShowLedgerDrawer(false)}
+          employeeId={employeeId}
+          employeeName={employee?.name}
+          employeeCode={employee?.profile?.employeeCode}
+          departmentName={departmentName || employee?.profile?.department}
+        />
       </motion.aside>
     </motion.div>
   );
