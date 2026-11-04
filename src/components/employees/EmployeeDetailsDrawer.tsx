@@ -31,6 +31,7 @@ interface Employee {
   shiftProfileId?: string | null;
   managerId?: string | null;
   manager?: { id: string; name: string; email: string } | null;
+  managedDepartments?: { id: string; name: string }[];
   profile?: {
     employeeCode: string;
     designation: string;
@@ -57,6 +58,7 @@ interface PaymentRecord {
 interface DepartmentOption {
   id: string;
   name: string;
+  canManage?: boolean;
 }
 
 interface ShiftOption {
@@ -82,6 +84,9 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [shifts, setShifts] = useState<ShiftOption[]>([]);
+  const departmentOptions = isSuperAdmin
+    ? departments
+    : departments.filter((department) => department.canManage !== false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -96,7 +101,8 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
     phone: '',
     joiningDate: '',
     departmentId: '',
-    shiftProfileId: ''
+    shiftProfileId: '',
+    managedDepartmentIds: [] as string[],
   });
 
   const fetchData = async () => {
@@ -124,7 +130,10 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         phone: p?.phone || '',
         joiningDate: p?.joiningDate ? String(p.joiningDate).slice(0, 10) : '',
         departmentId: empRes.data.departmentId || '',
-        shiftProfileId: empRes.data.shiftProfileId || ''
+        shiftProfileId: empRes.data.shiftProfileId || '',
+        managedDepartmentIds: (empRes.data.managedDepartments ?? []).map(
+          (department: { id: string }) => department.id
+        ),
       });
     } catch {
       console.error('Failed to load employee details');
@@ -167,7 +176,10 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         phone: p?.phone || '',
         joiningDate: p?.joiningDate ? String(p.joiningDate).slice(0, 10) : '',
         departmentId: employee.departmentId || '',
-        shiftProfileId: employee.shiftProfileId || ''
+        shiftProfileId: employee.shiftProfileId || '',
+        managedDepartmentIds: (employee.managedDepartments ?? []).map(
+          (department) => department.id
+        ),
       });
     }
     setIsEditing(false);
@@ -185,6 +197,13 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
 
       if (isSuperAdmin) {
         payload.shiftProfileId = editInfo.shiftProfileId || null;
+      }
+
+      if (
+        isSuperAdmin &&
+        (employee?.role === 'ADMIN' || employee?.role === 'MANAGER')
+      ) {
+        payload.managedDepartmentIds = editInfo.managedDepartmentIds;
       }
 
       if (editInfo.designationId === '__legacy__') {
@@ -423,6 +442,15 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                         <DetailItem icon={ShieldCheck} label="System Role" value={employee?.role ? employee.role.replace('_', ' ') : '—'} />
                         <DetailItem
                           icon={ShieldCheck}
+                          label="Managed Departments"
+                          value={
+                            (employee?.managedDepartments?.length ?? 0) > 0
+                              ? employee!.managedDepartments!.map((department) => department.name).join(', ')
+                              : 'None'
+                          }
+                        />
+                        <DetailItem
+                          icon={ShieldCheck}
                           label="Department Managers"
                           value={
                             (employee?.department?.managers?.length ?? 0) > 0
@@ -464,41 +492,41 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                       </div>
                     </div>
 
-                    {/* Compensation & Banking (Representing all fields!) */}
-                    <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-2xs">
-                      <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
-                        <div className="flex items-center gap-2">
-                          <Landmark size={15} className="text-blue-600" />
-                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Payroll & Bank Details</h4>
-                        </div>
-                        {canManage && (
+                    {/* Compensation & Banking: payroll-authorized viewers only. */}
+                    {canManage && (
+                      <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-2xs">
+                        <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <Landmark size={15} className="text-blue-600" />
+                            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Payroll & Bank Details</h4>
+                          </div>
                           <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
                             currentMonthPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
                           }`}>
                             {currentMonthPaid ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
                             {currentMonthPaid ? 'Paid this month' : 'Salary Pending'}
                           </span>
-                        )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <DetailItem
+                            icon={DollarSign}
+                            label="Base Salary"
+                            value={editInfo.baseSalary && Number(editInfo.baseSalary) > 0 ? `Rs. ${Number(editInfo.baseSalary).toLocaleString()}` : 'Not set'}
+                            highlight
+                          />
+                          <DetailItem
+                            icon={Building2}
+                            label="Bank Name"
+                            value={editInfo.bankName || 'Not provided'}
+                          />
+                          <DetailItem
+                            icon={CreditCard}
+                            label="Account / IBAN"
+                            value={editInfo.accountNumber || 'Not provided'}
+                          />
+                        </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <DetailItem
-                          icon={DollarSign}
-                          label="Base Salary"
-                          value={editInfo.baseSalary && Number(editInfo.baseSalary) > 0 ? `Rs. ${Number(editInfo.baseSalary).toLocaleString()}` : 'Not set'}
-                          highlight
-                        />
-                        <DetailItem
-                          icon={Building2}
-                          label="Bank Name"
-                          value={editInfo.bankName || 'Not provided'}
-                        />
-                        <DetailItem
-                          icon={CreditCard}
-                          label="Account / IBAN"
-                          value={editInfo.accountNumber || 'Not provided'}
-                        />
-                      </div>
-                    </div>
+                    )}
 
                     {/* Edit action CTA */}
                     {canManage && (
@@ -606,7 +634,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
 
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Department</label>
-                            {departments.length === 0 ? (
+                            {departmentOptions.length === 0 ? (
                               <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
                                 Unassigned
                               </div>
@@ -624,12 +652,55 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                                 className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
                               >
                                 {isSuperAdmin && <option value="">Unassigned</option>}
-                                {departments.map((d) => (
+                                {departmentOptions.map((d) => (
                                   <option key={d.id} value={d.id}>{d.name}</option>
                                 ))}
                               </select>
                             )}
                           </div>
+
+                          {isSuperAdmin &&
+                            (employee?.role === 'ADMIN' || employee?.role === 'MANAGER') && (
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                                  Managed departments
+                                </label>
+                                <div className="max-h-32 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                  {departments.length === 0 ? (
+                                    <p className="px-2 py-1 text-[11px] text-slate-400">
+                                      No departments available.
+                                    </p>
+                                  ) : (
+                                    departments.map((department) => (
+                                      <label
+                                        key={department.id}
+                                        className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-slate-700 hover:bg-white"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={editInfo.managedDepartmentIds.includes(department.id)}
+                                          onChange={() =>
+                                            setEditInfo((previous) => ({
+                                              ...previous,
+                                              managedDepartmentIds: previous.managedDepartmentIds.includes(department.id)
+                                                ? previous.managedDepartmentIds.filter((id) => id !== department.id)
+                                                : [...previous.managedDepartmentIds, department.id],
+                                            }))
+                                          }
+                                          disabled={saving}
+                                          className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+                                        />
+                                        {department.name}
+                                      </label>
+                                    ))
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-slate-400">
+                                  Home department is where this person sits. Managed departments are where
+                                  they can approve or administer.
+                                </p>
+                              </div>
+                            )}
 
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Shift Profile</label>

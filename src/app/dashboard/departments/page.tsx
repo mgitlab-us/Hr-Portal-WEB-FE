@@ -3,12 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   Building2, Plus, X, Loader2, Trash2, Pencil, Users, UserCog,
-  LayoutGrid, TableProperties, Settings2,
+  LayoutGrid, TableProperties, Settings2, UserPlus,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { DepartmentOrgChart } from '@/components/departments/DepartmentOrgChart';
+import DepartmentAssignEmployeesModal from '@/components/departments/DepartmentAssignEmployeesModal';
 import { useToast } from '@/components/ui/toast';
 import { useRouter } from 'next/navigation';
 
@@ -41,6 +42,7 @@ export default function DepartmentsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; dept?: Department } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
+  const [assignTarget, setAssignTarget] = useState<Department | null>(null);
   const [form, setForm] = useState<{ name: string; adminIds: string[]; managerIds: string[] }>({
     name: '',
     adminIds: [],
@@ -49,6 +51,9 @@ export default function DepartmentsPage() {
   const [view, setView] = useState<'chart' | 'table'>('chart');
   const canEditDepartments = user?.role === 'SUPER_ADMIN';
   const canOpenPage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+  const canAssignDepartment = (dept: Department) =>
+    user?.role === 'SUPER_ADMIN' ||
+    (user?.role === 'ADMIN' && dept.canManage !== false);
 
   useEffect(() => {
     if (user && !canOpenPage) {
@@ -133,7 +138,11 @@ export default function DepartmentsPage() {
       }
       setModal(null);
       fetchData();
-      toast.success(modal?.mode === 'create' ? 'Department created.' : 'Department updated.');
+      toast.success(
+        modal?.mode === 'create'
+          ? 'Department created.'
+          : 'Department updated. A lead’s home department is only adopted when they had none; existing homes stay unchanged.'
+      );
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       toast.error(e?.response?.data?.message || 'Operation failed');
@@ -237,9 +246,11 @@ export default function DepartmentsPage() {
               companyName={user?.company?.name || 'Organisation'}
               departments={departments}
               canEdit={canEditDepartments}
+              canAssignDepartment={canAssignDepartment}
               onAddDepartment={openCreate}
               onEditDepartment={openEdit}
               onDeleteDepartment={setDeleteTarget}
+              onAssignEmployees={setAssignTarget}
             />
           ) : (
             <div className="overflow-x-auto">
@@ -256,7 +267,7 @@ export default function DepartmentsPage() {
                       Reporting Managers
                     </th>
                     <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
-                      Employees
+                      Team / Leads
                     </th>
                     <th className="px-5 py-3 w-24" />
                   </tr>
@@ -311,26 +322,47 @@ export default function DepartmentsPage() {
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-center">
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-md">
-                          <Users size={11} />
-                          {dept._count.employees}
-                        </span>
+                        <div className="flex flex-wrap items-center justify-center gap-1">
+                          <span className="inline-flex items-center gap-1 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+                            <Users size={11} />
+                            {dept._count.employees} team
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
+                            <UserCog size={11} />
+                            {dept.admins.length + dept.managers.length} lead
+                            {dept.admins.length + dept.managers.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-5 py-3.5">
-                        {canEditDepartments && (
+                        {(canEditDepartments || canAssignDepartment(dept)) && (
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => openEdit(dept)}
-                              className="p-1.5 btn-ghost rounded-md"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget(dept)}
-                              className="p-1.5 btn-danger-ghost rounded-md"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            {canAssignDepartment(dept) && (
+                              <button
+                                onClick={() => setAssignTarget(dept)}
+                                className="p-1.5 btn-ghost rounded-md"
+                                title={`Assign employees to ${dept.name}`}
+                                aria-label={`Assign employees to ${dept.name}`}
+                              >
+                                <UserPlus size={14} />
+                              </button>
+                            )}
+                            {canEditDepartments && (
+                              <>
+                                <button
+                                  onClick={() => openEdit(dept)}
+                                  className="p-1.5 btn-ghost rounded-md"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteTarget(dept)}
+                                  className="p-1.5 btn-danger-ghost rounded-md"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
                           </div>
                         )}
                       </td>
@@ -453,6 +485,17 @@ export default function DepartmentsPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {assignTarget && (
+        <DepartmentAssignEmployeesModal
+          department={assignTarget}
+          onClose={() => setAssignTarget(null)}
+          onAssigned={() => {
+            setAssignTarget(null);
+            fetchData();
+          }}
+        />
       )}
 
       {deleteTarget && (

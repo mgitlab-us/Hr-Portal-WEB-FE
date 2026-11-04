@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Building2, Plus, Pencil, Trash2, UserCog, Users } from 'lucide-react';
+import { Building2, Plus, Pencil, Trash2, UserCog, UserPlus, Users } from 'lucide-react';
 
 interface Department {
   id: string;
@@ -18,18 +18,22 @@ interface DepartmentOrgChartProps {
   companyName: string;
   departments: Department[];
   canEdit?: boolean;
+  canAssignDepartment?: (dept: Department) => boolean;
   onAddDepartment: () => void;
   onEditDepartment: (dept: Department) => void;
   onDeleteDepartment: (dept: Department) => void;
+  onAssignEmployees: (dept: Department) => void;
 }
 
 export function DepartmentOrgChart({
   companyName,
   departments,
   canEdit = true,
+  canAssignDepartment,
   onAddDepartment,
   onEditDepartment,
   onDeleteDepartment,
+  onAssignEmployees,
 }: DepartmentOrgChartProps) {
   const totalEmployees = departments.reduce((sum, d) => sum + d._count.employees, 0);
 
@@ -83,28 +87,48 @@ export function DepartmentOrgChart({
                         </div>
                       </div>
 
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
-                        <Users size={10} />
-                        {dept._count.employees} {dept._count.employees === 1 ? 'employee' : 'employees'}
+                      <span className="flex flex-wrap items-center gap-1">
+                        <span className="inline-flex items-center gap-1 rounded-md border border-slate-100 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                          <Users size={10} />
+                          {dept._count.employees} team
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-md border border-blue-100 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600">
+                          <UserCog size={10} />
+                          {(dept.admins?.length ?? 0) + (dept.managers?.length ?? 0)} lead
+                          {(dept.admins?.length ?? 0) + (dept.managers?.length ?? 0) === 1 ? '' : 's'}
+                        </span>
                       </span>
 
                       {/* Hover actions */}
-                      {canEdit && (
+                      {(canEdit || canAssignDepartment?.(dept)) && (
                         <div className="absolute -top-2.5 -right-2.5 hidden group-hover:flex items-center gap-1">
-                          <button
-                            onClick={() => onEditDepartment(dept)}
-                            className="p-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 rounded-full shadow-sm transition-colors"
-                            aria-label={`Edit ${dept.name}`}
-                          >
-                            <Pencil size={11} />
-                          </button>
-                          <button
-                            onClick={() => onDeleteDepartment(dept)}
-                            className="p-1.5 bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-full shadow-sm transition-colors"
-                            aria-label={`Delete ${dept.name}`}
-                          >
-                            <Trash2 size={11} />
-                          </button>
+                          {canAssignDepartment?.(dept) && (
+                            <button
+                              onClick={() => onAssignEmployees(dept)}
+                              className="p-1.5 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 rounded-full shadow-sm transition-colors"
+                              aria-label={`Assign employees to ${dept.name}`}
+                            >
+                              <UserPlus size={11} />
+                            </button>
+                          )}
+                          {canEdit && (
+                            <>
+                              <button
+                                onClick={() => onEditDepartment(dept)}
+                                className="p-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 rounded-full shadow-sm transition-colors"
+                                aria-label={`Edit ${dept.name}`}
+                              >
+                                <Pencil size={11} />
+                              </button>
+                              <button
+                                onClick={() => onDeleteDepartment(dept)}
+                                className="p-1.5 bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-full shadow-sm transition-colors"
+                                aria-label={`Delete ${dept.name}`}
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
