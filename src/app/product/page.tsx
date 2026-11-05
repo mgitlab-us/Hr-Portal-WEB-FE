@@ -27,6 +27,9 @@ import {
 
 const navItems = ['Product', 'Features', 'Solutions', 'About'];
 
+// Placeholder names (testing phase) — replace with real clients later.
+const trustedOrgs = ['ABC Org', 'Test Company', 'Demo Corp', 'Sample Inc', 'Fake Ltd'];
+
 const features = [
   {
     icon: CalendarCheck,
@@ -138,6 +141,7 @@ function YouTubeIcon() {
 
 function Logo({ dark = false, large = false, compact = false }: { dark?: boolean; large?: boolean; compact?: boolean }) {
   const size = compact ? 86 : large ? 180 : 84;
+  void dark;
 
   return (
     <div className="flex items-center justify-center">
@@ -278,19 +282,11 @@ export default function ProductLandingPage() {
             Trusted by forward-thinking organizations
           </p>
           <div className="flex flex-1 flex-wrap items-center justify-around gap-x-8 gap-y-4 text-slate-600">
-            <span className="flex items-center gap-1.5 text-xl font-semibold tracking-tight">
-              <span className="grid h-5 w-5 grid-cols-2 gap-px">
-                <i className="bg-slate-600" />
-                <i className="bg-slate-600" />
-                <i className="bg-slate-600" />
-                <i className="bg-slate-600" />
+            {trustedOrgs.map((name) => (
+              <span key={name} className="text-xl font-semibold tracking-tight">
+                {name}
               </span>
-              Microsoft
-            </span>
-            <span className="text-2xl font-medium tracking-tight">Google</span>
-            <span className="text-xl font-bold tracking-[0.12em]">ORACLE</span>
-            <span className="text-2xl font-black italic">SAP</span>
-            <span className="text-2xl font-bold tracking-tight">amazon</span>
+            ))}
           </div>
         </div>
       </section>
