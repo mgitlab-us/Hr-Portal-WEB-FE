@@ -20,12 +20,16 @@ interface User {
   role: 'EMPLOYEE' | 'MANAGER' | 'ADMIN' | 'SUPER_ADMIN';
   companyId: string;
   departmentId?: string | null;
+  department?: string | null;
+  employeeCode?: string | null;
+  designation?: string | null;
   adminDepartmentIds?: string[];
   managerDepartmentIds?: string[];
   permissions?: UserPermissions;
   company?: {
     name: string;
     timezone: string;
+    logo?: string | null;
   };
   mustChangePassword?: boolean;
 }

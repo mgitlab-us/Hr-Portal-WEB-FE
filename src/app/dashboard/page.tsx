@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Users,
   TrendingUp,
@@ -9,13 +9,31 @@ import {
   Clock,
   Plane,
   FileText,
+  BarChart3,
 } from 'lucide-react';
+import {
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
-import { formatWeekdayDateDMY } from '@/lib/datetime';
+import { formatDateDMY, formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import HeaderActions, { type NotificationItem } from '@/components/layout/HeaderActions';
 import StatsDrilldownDialog, { type DrilldownMetric } from '@/components/dashboard/StatsDrilldownDialog';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
+} from '@/components/ui/chart';
 import { io } from 'socket.io-client';
 
 // ── Status tones — used by the live activity feed (badges + avatars).
@@ -141,6 +159,56 @@ type PulseItem = {
   companyId?: string;
 };
 
+type Bucket = 'onTime' | 'late' | 'absent' | 'leave';
+
+const trendChartConfig = {
+  onTime: { label: 'On time', color: 'var(--chart-1)' },
+  leave: { label: 'On leave', color: 'var(--chart-2)' },
+  late: { label: 'Late', color: 'var(--chart-3)' },
+  absent: { label: 'Absent', color: 'var(--chart-4)' },
+} satisfies ChartConfig;
+
+const checkinChartConfig = {
+  avgCheckinMinutes: { label: 'Avg check-in', color: 'var(--chart-1)' },
+} satisfies ChartConfig;
+
+function classifyStatus(status: string): Bucket {
+  const s = status?.toUpperCase();
+  if (s === 'LATE') return 'late';
+  if (s === 'ABSENT') return 'absent';
+  if (s === 'PRESENT' || s === 'ON-TIME') return 'onTime';
+  return 'leave';
+}
+
+function toISODate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+function getDateList(from: string, to: string): string[] {
+  const dates: string[] = [];
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return dates;
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    dates.push(toISODate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function formatShortDate(iso: string) {
+  return formatDateDMY(iso);
+}
+
+function minutesToClock(mins: number) {
+  const h24 = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  const period = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
 // ── Circular attendance gauge with the percentage centred inside
 function AttendanceRing({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, percent));
@@ -234,9 +302,17 @@ export default function DashboardOverview() {
     attendanceChange: null as number | null,
   });
   const [pulse, setPulse] = useState<PulseItem[]>([]);
+  const [trendData, setTrendData] = useState<any[]>([]);
   const [isOverviewLoading, setIsOverviewLoading] = useState(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [drilldownMetric, setDrilldownMetric] = useState<DrilldownMetric | null>(null);
+
+  const range = useMemo(() => {
+    const now = new Date();
+    const to = toISODate(now);
+    const from = toISODate(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000));
+    return { from, to };
+  }, []);
 
   useEffect(() => {
     const init = () => {
@@ -263,12 +339,41 @@ export default function DashboardOverview() {
     const fetchDashboard = async () => {
       setIsOverviewLoading(true);
       try {
-        const [statsRes, pulseRes] = await Promise.all([
+        const [statsRes, pulseRes, trendRes] = await Promise.all([
           api.get('/attendance/stats/company'),
           api.get('/attendance/stats/company-pulse'),
+          api.get(`/attendance/logs/range?from=${range.from}&to=${range.to}`),
         ]);
         setStats(statsRes.data);
         setPulse(pulseRes.data);
+
+        const dates = getDateList(range.from, range.to);
+        const trend = dates.map((date) => {
+          const logs = trendRes.data?.[date] || [];
+          const counts: Record<Bucket, number> = { onTime: 0, late: 0, absent: 0, leave: 0 };
+          let checkinMinutesSum = 0;
+          let checkinCount = 0;
+
+          logs.forEach((log: any) => {
+            counts[classifyStatus(log.status)] += 1;
+            if (log.checkinAt) {
+              const t = new Date(log.checkinAt);
+              if (!Number.isNaN(t.getTime())) {
+                checkinMinutesSum += t.getHours() * 60 + t.getMinutes();
+                checkinCount += 1;
+              }
+            }
+          });
+
+          return {
+            date,
+            label: formatShortDate(date),
+            ...counts,
+            avgCheckinMinutes: checkinCount > 0 ? checkinMinutesSum / checkinCount : null,
+          };
+        });
+
+        setTrendData(trend);
       } catch (err) {
         console.error('Overview data fetch failed:', err);
       } finally {
@@ -290,7 +395,7 @@ export default function DashboardOverview() {
       }, 4000);
     };
 
-    const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1').replace(/\/api\/v1$/, '');
+    const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1').replace(/\/api\/v1$/, '');
     const socket = io(socketUrl, {
       auth: { token: useAuthStore.getState().accessToken },
       transports: ['websocket'],
@@ -358,7 +463,14 @@ export default function DashboardOverview() {
       if (refreshTimer) clearTimeout(refreshTimer);
       socket.disconnect();
     };
-  }, [user]);
+  }, [range, user]);
+
+  const overallAvgCheckin = useMemo(() => {
+    const withData = trendData.filter((d) => d.avgCheckinMinutes !== null);
+    if (withData.length === 0) return null;
+    const sum = withData.reduce((acc, d) => acc + (d.avgCheckinMinutes || 0), 0);
+    return sum / withData.length;
+  }, [trendData]);
 
   const [today] = useState(() => formatWeekdayDateDMY(new Date()));
 
@@ -538,6 +650,106 @@ export default function DashboardOverview() {
               <p className="mt-1 text-xs text-ink-soft">Daily team average</p>
             </section>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4.5 lg:grid-cols-2">
+          <section className={`${CARD} p-4.5`}>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">Attendance</p>
+                <h2 className="mt-0.5 text-sm font-bold text-ink">Trend overview</h2>
+              </div>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#EAF4FF] text-[#2563EB]">
+                <BarChart3 size={14} aria-hidden="true" />
+              </div>
+            </div>
+
+            {trendData.length > 0 ? (
+              <ChartContainer config={trendChartConfig} className="h-[240px] w-full">
+                <AreaChart data={trendData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="fillOnTimeOverview" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-onTime)" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="var(--color-onTime)" stopOpacity={0.08} />
+                    </linearGradient>
+                    <linearGradient id="fillLeaveOverview" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-leave)" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="var(--color-leave)" stopOpacity={0.08} />
+                    </linearGradient>
+                    <linearGradient id="fillLateOverview" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-late)" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="var(--color-late)" stopOpacity={0.08} />
+                    </linearGradient>
+                    <linearGradient id="fillAbsentOverview" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-absent)" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="var(--color-absent)" stopOpacity={0.08} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Area type="monotone" dataKey="onTime" stackId="1" stroke="var(--color-onTime)" fill="url(#fillOnTimeOverview)" />
+                  <Area type="monotone" dataKey="leave" stackId="1" stroke="var(--color-leave)" fill="url(#fillLeaveOverview)" />
+                  <Area type="monotone" dataKey="late" stackId="1" stroke="var(--color-late)" fill="url(#fillLateOverview)" />
+                  <Area type="monotone" dataKey="absent" stackId="1" stroke="var(--color-absent)" fill="url(#fillAbsentOverview)" />
+                </AreaChart>
+              </ChartContainer>
+            ) : (
+              <div className="flex h-[240px] items-center justify-center text-sm text-ink-soft">No attendance data for this range</div>
+            )}
+          </section>
+
+          <section className={`${CARD} p-4.5`}>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">Timing</p>
+                <h2 className="mt-0.5 text-sm font-bold text-ink">Average check-in</h2>
+              </div>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E8F7F3] text-[#12A06B]">
+                <Clock size={14} aria-hidden="true" />
+              </div>
+            </div>
+
+            {trendData.some((d) => d.avgCheckinMinutes !== null) ? (
+              <ChartContainer config={checkinChartConfig} className="h-[240px] w-full">
+                <LineChart data={trendData.filter((d) => d.avgCheckinMinutes !== null)} margin={{ top: 12, right: 16, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    width={52}
+                    tick={{ fontSize: 11, fill: '#94a3b8' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) => minutesToClock(v)}
+                    domain={['dataMin - 15', 'dataMax + 15']}
+                    tickMargin={4}
+                  />
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent indicator="line" formatter={(value) => minutesToClock(Number(value))} />}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="avgCheckinMinutes"
+                    stroke="var(--color-avgCheckinMinutes)"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: 'var(--color-avgCheckinMinutes)', strokeWidth: 0 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </LineChart>
+              </ChartContainer>
+            ) : (
+              <div className="flex h-[240px] items-center justify-center text-sm text-ink-soft">No check-in trend data</div>
+            )}
+
+            {overallAvgCheckin !== null && (
+              <p className="mt-2 text-xs text-ink-soft">
+                Average check-in: <span className="font-semibold text-ink">{minutesToClock(overallAvgCheckin)}</span>
+              </p>
+            )}
+          </section>
         </div>
       </div>
 

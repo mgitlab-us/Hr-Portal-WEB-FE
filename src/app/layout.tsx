@@ -9,8 +9,8 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "TapIN",
-  description: "TapIN",
+  title: "iTapIN",
+  description: "iTapIN",
 };
 
 export default function RootLayout({
@@ -19,11 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${plusJakarta.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={`${plusJakarta.variable} h-full antialiased`}>
+      <body className="min-h-svh w-full">
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

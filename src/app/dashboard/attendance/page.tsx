@@ -54,6 +54,7 @@ interface AttendanceLog {
   checkout: string;
   checkinAt: string;
   checkoutAt: string;
+  totalBreakMinutes?: number | null;
   checkinLat?: number | null;
   checkinLng?: number | null;
   checkinAccuracy?: number | null;
@@ -186,6 +187,14 @@ const computeDuration = (checkinAt?: string, checkoutAt?: string) => {
   if (diff <= 0) return '—';
   const h = Math.floor(diff / 60);
   const m = Math.floor(diff % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+};
+
+const formatBreakMinutes = (totalBreakMinutes?: number | null) => {
+  const breakMinutes = Number(totalBreakMinutes ?? 0);
+  if (!breakMinutes || breakMinutes <= 0) return '0m';
+  const h = Math.floor(breakMinutes / 60);
+  const m = breakMinutes % 60;
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
@@ -728,6 +737,7 @@ export default function AttendanceLogsPage() {
                               </div>
                               <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
                                 {duration !== '—' ? `Duration: ${duration}` : ''}
+                                {duration !== '—' && (log.totalBreakMinutes ?? 0) > 0 ? ` • Break: ${formatBreakMinutes(log.totalBreakMinutes)}` : ''}
                               </p>
                             </td>
 
@@ -852,6 +862,14 @@ export default function AttendanceLogsPage() {
                   </span>
                   <span className="text-sm font-semibold text-blue-700">
                     {computeDuration(inspectLog.checkinAt, inspectLog.checkoutAt)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Break Taken
+                  </span>
+                  <span className="text-sm font-semibold text-slate-700">
+                    {formatBreakMinutes(inspectLog.totalBreakMinutes)}
                   </span>
                 </div>
                 <div>

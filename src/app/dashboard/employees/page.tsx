@@ -1288,7 +1288,7 @@ export default function EmployeesPage() {
                     setEmployeeCodeError(null);
                     set('employeeCode')(e);
                   }}
-                  placeholder="Auto-generated if blank (e.g. ASE-SOF-001)"
+                  placeholder="Auto-generated if blank (e.g. ACME-ENG-SWE-26001)"
                   className={`w-full bg-white border rounded-lg py-2.5 px-3 text-sm tabular-nums text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
                     employeeCodeError
                       ? 'border-red-400 ring-red-100 ring-2'
@@ -1298,7 +1298,7 @@ export default function EmployeesPage() {
                 {employeeCodeError ? (
                   <p className="text-xs text-red-500 font-medium">{employeeCodeError}</p>
                 ) : (
-                  <p className="text-[10px] text-slate-400 italic">Auto-generated · Format: DES-DEP-001 · You can override this</p>
+                  <p className="text-[10px] text-slate-400 italic">Auto-generated · Format: COMPANY-DEP-DES-26001 · You can override this</p>
                 )}
               </div>
 

@@ -116,22 +116,31 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
             <div className="space-y-0.5 p-1.5">
               <button
                 type="button"
-                onClick={() => { close(); router.push('/dashboard/profile'); }}
+                onClick={() => {
+                  close();
+                  if (user?.role === 'EMPLOYEE') {
+                    router.push('/portal/profile');
+                  } else {
+                    router.push('/dashboard/profile');
+                  }
+                }}
                 className={MENU_ITEM}
                 role="menuitem"
               >
                 <User size={16} className="text-ink-soft" />
                 My Profile &amp; Security
               </button>
-              <button
-                type="button"
-                onClick={() => { close(); router.push('/dashboard/settings'); }}
-                className={MENU_ITEM}
-                role="menuitem"
-              >
-                <Settings size={16} className="text-ink-soft" />
-                Company Setup
-              </button>
+              {user?.role === 'SUPER_ADMIN' && (
+                <button
+                  type="button"
+                  onClick={() => { close(); router.push('/dashboard/settings'); }}
+                  className={MENU_ITEM}
+                  role="menuitem"
+                >
+                  <Settings size={16} className="text-ink-soft" />
+                  Company Setup
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleLogout}
