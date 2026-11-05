@@ -37,7 +37,7 @@ export default function GeneralPanel() {
     workMinutesPerDay: 480,
     breakMinutesAllocated: 60,
     gracePeriodMinutes: 15,
-    expectedCheckinHour: 9,
+    expectedCheckinHour: 12,
     expectedCheckinMinute: 0,
   });
   const [profile, setProfile] = useState({
@@ -57,7 +57,7 @@ export default function GeneralPanel() {
   const [savingShift, setSavingShift] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [localCheckin, setLocalCheckin] = useState<{ hour: number; minute: number; period: 'AM' | 'PM' }>(
-    { hour: 9, minute: 0, period: 'AM' }
+    { hour: 12, minute: 0, period: 'PM' }
   );
 
   useEffect(() => {
@@ -74,10 +74,24 @@ export default function GeneralPanel() {
 
         if (!active) return;
 
-        setSettings(shiftRes.data);
+        const rawStart = shiftRes.data.shiftStart ?? '12:00';
+        const [hour, minute] = String(rawStart).split(':').map(Number);
+        const startHour = Number.isFinite(hour) ? hour : 12;
+        const startMinute = Number.isFinite(minute) ? minute : 0;
+
+        setSettings({
+          workMinutesPerDay: shiftRes.data.workMinutesPerDay ?? 480,
+          breakMinutesAllocated: shiftRes.data.breakMinutesAllocated ?? 60,
+          gracePeriodMinutes: shiftRes.data.gracePeriodMinutes ?? 15,
+          expectedCheckinHour: startHour,
+          expectedCheckinMinute: startMinute,
+        });
         setProfile((prev) => ({ ...prev, ...profileRes.data }));
-        const h24 = shiftRes.data.expectedCheckinHour;
-        setLocalCheckin({ hour: h24 % 12 || 12, minute: shiftRes.data.expectedCheckinMinute, period: h24 >= 12 ? 'PM' : 'AM' });
+        setLocalCheckin({
+          hour: startHour % 12 || 12,
+          minute: startMinute,
+          period: startHour >= 12 ? 'PM' : 'AM',
+        });
       } catch (err) { console.error(err); }
       finally {
         if (active) setLoading(false);
@@ -118,13 +132,38 @@ export default function GeneralPanel() {
 
   const handleSaveShift = async () => {
     setSavingShift(true);
-    let h24 = localCheckin.hour % 12;
-    if (localCheckin.period === 'PM') h24 += 12;
+
     try {
-      await api.put('/attendance/settings/company-shift', { ...settings, expectedCheckinHour: h24, expectedCheckinMinute: localCheckin.minute });
+      let h24 = localCheckin.hour % 12;
+      if (localCheckin.period === 'PM') h24 += 12;
+
+      const startTotal = h24 * 60 + localCheckin.minute;
+      const endTotal = startTotal + settings.workMinutesPerDay + settings.breakMinutesAllocated;
+      const endHour = Math.floor((endTotal % (24 * 60)) / 60);
+      const endMinute = endTotal % 60;
+
+      const shiftStart = `${String(h24).padStart(2, '0')}:${String(localCheckin.minute).padStart(2, '0')}`;
+      const shiftEnd = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+
+      await api.put('/attendance/settings/company-shift', {
+        shiftStart,
+        shiftEnd,
+        breakMinutesAllocated: settings.breakMinutesAllocated,
+        gracePeriodMinutes: settings.gracePeriodMinutes,
+      });
+
+      setSettings((prev) => ({
+        ...prev,
+        expectedCheckinHour: h24,
+        expectedCheckinMinute: localCheckin.minute,
+      }));
+
       toast.success('Shift settings updated.');
-    } catch { toast.error('Failed to update the shift settings.'); }
-    finally { setSavingShift(false); }
+    } catch {
+      toast.error('Failed to update the shift settings.');
+    } finally {
+      setSavingShift(false);
+    }
   };
 
   const handleSaveProfile = async () => {

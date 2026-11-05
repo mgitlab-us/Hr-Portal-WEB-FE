@@ -45,6 +45,7 @@ export interface NavEntry {
 const baseNavItems: NavEntry[] = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
   { href: '/dashboard/employees', icon: Users, label: 'Employees' },
+  { href: '/dashboard/groups', icon: Users, label: 'Groups' },
   { href: '/dashboard/attendance', icon: Clock, label: 'Attendance' },
   { href: '/dashboard/payroll', icon: Wallet, label: 'Payroll' },
   { href: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
@@ -317,9 +318,12 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
   };
 
   // Redirect if not logged in once hydration is settled.
+  // Also redirect employees away from admin console to their portal.
   React.useEffect(() => {
     if (authHydrated && !user) {
       router.replace('/login');
+    } else if (authHydrated && user?.role === 'EMPLOYEE') {
+      router.replace('/portal');
     }
   }, [authHydrated, user, router]);
 

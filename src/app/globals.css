@@ -4,7 +4,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+html {
+  min-height: 100%;
+  margin: 0;
+}
+
 body {
+  min-height: 100%;
+  margin: 0;
   background-color: var(--background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -39,14 +46,10 @@ body {
 }
 
 @theme inline {
-  /* Font vars are set by next/font in app/layout.tsx */
   --font-heading: var(--font-plus-jakarta);
   --font-sans: var(--font-plus-jakarta);
-  /* Keep the mono utility on the brand font too so no page drifts to a
-     different typeface for IDs, codes, or chart values. */
   --font-mono: var(--font-plus-jakarta);
 
-  /* Dashboard palette */
   --color-ink: #0f1b4d;
   --color-ink-soft: #5f70a0;
   --color-ink-faint: #8a98c0;
@@ -166,14 +169,15 @@ body {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
   }
-  /* Native controls do not always inherit the document font. Force the brand
-     family on every interactive control so buttons/inputs cannot drift. */
+
   button,
   input,
   optgroup,
@@ -184,8 +188,6 @@ body {
 }
 
 @layer components {
-  /* Shared brand button colors. Size, spacing, and radius stay with each
-     caller so existing layouts keep their proportions. */
   .btn-primary {
     @apply bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
   }
@@ -208,10 +210,6 @@ body {
 }
 
 @keyframes toast-progress {
-  from {
-    transform: scaleX(1);
-  }
-  to {
-    transform: scaleX(0);
-  }
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
 }

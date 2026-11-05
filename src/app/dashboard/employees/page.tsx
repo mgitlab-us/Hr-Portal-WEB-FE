@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, MoreVertical, Trash2, Power, DollarSign } from 'lucide-react';
+import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, MoreVertical, Trash2, Power, DollarSign, Building2, UserX } from 'lucide-react';
 import { api } from '@/lib/api';
-import { todayDateKey } from '@/lib/datetime';
+import { formatDateDMY, todayDateKey } from '@/lib/datetime';
 import { useAuthStore } from '@/store/authStore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import EmployeeDetailsDrawer from '@/components/employees/EmployeeDetailsDrawer';
+import EmployeeDirectoryDrawer from '@/components/employees/EmployeeDirectoryDrawer';
 import CredentialsShareModal from '@/components/employees/CredentialsShareModal';
 import DesignationSelect from '@/components/employees/DesignationSelect';
 import FilterChips from '@/components/filters/FilterChips';
@@ -40,7 +41,12 @@ interface Employee {
     designation: string;
     designationId?: string | null;
     department: string;
+    joiningDate?: string;
   };
+  homeDepartment?: { id: string; name: string } | null;
+  managedDepartments?: { id: string; name: string }[];
+  canManage?: boolean;
+  canViewFullProfile?: boolean;
 }
 
 interface PersonOption {
@@ -55,6 +61,7 @@ interface Department {
   admin?: PersonOption | null;
   admins?: PersonOption[];
   managers?: PersonOption[];
+  canManage?: boolean;
 }
 
 interface ShiftProfile {
@@ -145,6 +152,7 @@ export default function EmployeesPage() {
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'EMPLOYEE' | 'MANAGER' | 'ADMIN'>('ALL');
+  const [showUnassignedOnly, setShowUnassignedOnly] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -160,6 +168,7 @@ export default function EmployeesPage() {
     employeeCode: '',
     shiftProfileId: '',
     joiningDate: todayDateKey(),
+    managedDepartmentIds: [] as string[],
   });
   const [createdCredentials, setCreatedCredentials] = useState<{
     name: string;
@@ -171,11 +180,23 @@ export default function EmployeesPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ type: 'DEACTIVATE' | 'ARCHIVE'; id: string; name: string } | null>(null);
   const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
+  const [directoryEmployeeId, setDirectoryEmployeeId] = useState<string | null>(null);
   const [payrollStatus, setPayrollStatus] = useState<PayrollStatusRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkDepartmentId, setBulkDepartmentId] = useState('');
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [scope, setScope] = useState<'team' | 'company'>('team');
+  const employeeRequestId = useRef(0);
   const pageSize = 20;
+  const isCompanyScope = scope === 'company';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const canBulkAssign =
+    !isCompanyScope && (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN');
 
   const canManageEmployee = (emp: Employee) => {
+    if (typeof emp.canManage === 'boolean') return emp.canManage;
     if (user?.role === 'SUPER_ADMIN') return true;
     if (user?.role === 'ADMIN') {
       const managedDepartmentIds = departments
@@ -191,36 +212,91 @@ export default function EmployeesPage() {
     return false;
   };
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async (scopeToFetch: 'team' | 'company') => {
+    const requestId = ++employeeRequestId.current;
+    setLoading(true);
     try {
-      const res = await api.get('/employees');
-      setEmployees(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+      const res = await api.get(`/employees?scope=${scopeToFetch}`);
+      if (requestId !== employeeRequestId.current) return;
+      const list: Employee[] = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      setEmployees(list);
+      // Drop selections for employees that disappeared or were archived.
+      setSelectedIds((previous) => {
+        const validIds = new Set(list.map((employee) => employee.id));
+        const next = new Set([...previous].filter((id) => validIds.has(id)));
+        return next.size === previous.size ? previous : next;
+      });
     } catch (err) {
+      if (requestId !== employeeRequestId.current) return;
       console.error('Failed to fetch employees:', err);
+      setEmployees([]);
     } finally {
-      setLoading(false);
+      if (requestId === employeeRequestId.current) setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchPayrollStatus = async () => {
+  const fetchPayrollStatus = useCallback(async () => {
     try {
       const res = await api.get('/salary/status');
       setPayrollStatus(res.data);
     } catch { }
-  };
+  }, []);
 
   useEffect(() => {
     if (user?.mustChangePassword) return;
-    const init = async () => {
-      await fetchEmployees();
-      await fetchPayrollStatus();
-      api.get('/shifts').then(res => setShifts(res.data)).catch(() => { });
-      api.get('/departments').then(res => {
-        setDepartments(res.data);
-      }).catch(() => { });
+    const load = async () => {
+      await fetchEmployees(scope);
     };
-    init();
+    void load();
+  }, [fetchEmployees, scope, user]);
+
+  useEffect(() => {
+    if (user?.mustChangePassword) return;
+    api.get('/shifts').then(res => setShifts(res.data)).catch(() => { });
+    api.get('/departments').then(res => {
+      setDepartments(res.data);
+    }).catch(() => { });
   }, [user]);
+
+  useEffect(() => {
+    if (user?.mustChangePassword) return;
+    const load = async () => {
+      if (scope !== 'team' || (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN')) {
+        setPayrollStatus([]);
+        return;
+      }
+      await fetchPayrollStatus();
+    };
+    void load();
+  }, [fetchPayrollStatus, scope, user]);
+
+  const changeScope = (nextScope: 'team' | 'company') => {
+    if (nextScope === scope) return;
+    setScope(nextScope);
+    setSelectedIds(new Set());
+    setBulkAssignOpen(false);
+    setExpandedEmployeeId(null);
+    setDirectoryEmployeeId(null);
+    setOpenMenuId(null);
+    setConfirmModal(null);
+    setSearch('');
+    setDepartmentFilter('');
+    setStatusFilter('ALL');
+    setRoleFilter('ALL');
+    setShowUnassignedOnly(false);
+    setCurrentPage(1);
+  };
+
+  const unassignedCount = useMemo(
+    () =>
+      employees.filter(
+        (emp) =>
+          emp.role !== 'SUPER_ADMIN' &&
+          !emp.departmentId &&
+          !emp.department?.id
+      ).length,
+    [employees]
+  );
 
   const scopedEmployees = useMemo(() => {
     return employees.filter((emp) => {
@@ -232,9 +308,11 @@ export default function EmployeesPage() {
         !departmentFilter ||
         emp.departmentId === departmentFilter ||
         emp.department?.id === departmentFilter;
-      return matchesSearch && matchesDept;
+      const matchesUnassigned =
+        !showUnassignedOnly || (!emp.departmentId && !emp.department?.id);
+      return matchesSearch && matchesDept && matchesUnassigned;
     });
-  }, [employees, search, departmentFilter]);
+  }, [employees, search, departmentFilter, showUnassignedOnly]);
 
   const statusOptions = useMemo(() => {
     const active = scopedEmployees.filter((emp) => emp.isActive).length;
@@ -274,10 +352,123 @@ export default function EmployeesPage() {
   }, [filteredEmployees, currentPage, pageSize]);
 
   const hasActiveFilters =
-    !!search || !!departmentFilter || statusFilter !== 'ALL' || roleFilter !== 'ALL';
+    !!search ||
+    !!departmentFilter ||
+    statusFilter !== 'ALL' ||
+    roleFilter !== 'ALL' ||
+    showUnassignedOnly;
 
   const expandedEmployee =
     employees.find((emp) => emp.id === expandedEmployeeId) ?? null;
+  const directoryEmployee =
+    employees.find((emp) => emp.id === directoryEmployeeId) ?? null;
+
+  const assignableDepartments = useMemo(() => {
+    if (user?.role === 'SUPER_ADMIN') return departments;
+    if (user?.role !== 'ADMIN') return [];
+    return departments.filter(
+      (department) =>
+        department.canManage === true ||
+        department.admins?.some((admin) => admin.id === user.id) ||
+        department.admin?.id === user.id
+    );
+  }, [departments, user]);
+
+  const creationDepartments = user?.role === 'SUPER_ADMIN' ? departments : assignableDepartments;
+
+  const openCreate = () => {
+    const departmentId = user?.role === 'ADMIN' && creationDepartments.length === 1
+      ? creationDepartments[0].id
+      : '';
+    setNewEmployee((previous) => ({ ...previous, departmentId, designationId: '', managedDepartmentIds: [] }));
+    setIsAddModalOpen(true);
+  };
+
+  const filterDepartments = useMemo(() => {
+    if (isCompanyScope) return departments;
+    if (user?.role === 'ADMIN') return assignableDepartments;
+    return departments;
+  }, [assignableDepartments, departments, isCompanyScope, user?.role]);
+
+  const visibleDepartmentCount = useMemo(() => {
+    const ids = new Set<string>();
+    filteredEmployees.forEach((employee) => {
+      const departmentId = employee.departmentId || employee.department?.id;
+      if (departmentId) ids.add(departmentId);
+    });
+    return ids.size;
+  }, [filteredEmployees]);
+
+  const showScopeTabs = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+
+  const selectedEmployees = useMemo(
+    () => employees.filter((employee) => selectedIds.has(employee.id)),
+    [employees, selectedIds]
+  );
+  const selectedWithHome = selectedEmployees.filter(
+    (employee) => employee.departmentId || employee.department?.id
+  ).length;
+  const pageSelectableIds = paginatedEmployees
+    .filter((employee) => employee.role !== 'SUPER_ADMIN')
+    .map((employee) => employee.id);
+  const allPageSelected =
+    pageSelectableIds.length > 0 &&
+    pageSelectableIds.every((id) => selectedIds.has(id));
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllPage = () => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      const everySelected = pageSelectableIds.every((id) => next.has(id));
+      pageSelectableIds.forEach((id) => {
+        if (everySelected) next.delete(id);
+        else next.add(id);
+      });
+      return next;
+    });
+  };
+
+  const openBulkAssign = () => {
+    if (selectedIds.size === 0) return;
+    setBulkDepartmentId(
+      assignableDepartments.length === 1 ? assignableDepartments[0].id : ''
+    );
+    setBulkAssignOpen(true);
+  };
+
+  const handleBulkAssign = async () => {
+    if (!bulkDepartmentId || selectedIds.size === 0) return;
+    setBulkAssigning(true);
+    try {
+      const res = await api.post('/employees/bulk-assign-department', {
+        employeeIds: [...selectedIds],
+        departmentId: bulkDepartmentId,
+      });
+      const assigned = Number(res.data?.assigned) || 0;
+      const skipped = Number(res.data?.skipped) || 0;
+      toast.success(
+        skipped > 0
+          ? `Assigned ${assigned} employee${assigned === 1 ? '' : 's'}; ${skipped} already in that department.`
+          : `Assigned ${assigned} employee${assigned === 1 ? '' : 's'}.`
+      );
+      setBulkAssignOpen(false);
+      setSelectedIds(new Set());
+      await fetchEmployees('team');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e?.response?.data?.message || 'Failed to assign employees');
+    } finally {
+      setBulkAssigning(false);
+    }
+  };
 
   /** Generate a secure random temporary password */
   const generateTempPassword = () => {
@@ -294,6 +485,10 @@ export default function EmployeesPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newEmployee.departmentId && user?.role !== 'SUPER_ADMIN') {
+      toast.error('Choose one of your managed departments before creating this employee.');
+      return;
+    }
     setSubmitting(true);
     setEmployeeCodeError(null);
     const tempPassword = generateTempPassword();
@@ -308,7 +503,7 @@ export default function EmployeesPage() {
       });
       const createdEmp = res.data as { name?: string; email?: string; profile?: { employeeCode?: string } };
       setIsAddModalOpen(false);
-      fetchEmployees();
+      fetchEmployees(scope);
       setNewEmployee({
         name: '',
         email: '',
@@ -320,6 +515,7 @@ export default function EmployeesPage() {
         employeeCode: '',
         shiftProfileId: '',
         joiningDate: todayDateKey(),
+        managedDepartmentIds: [],
       });
       // Show credential card
       setCreatedCredentials({
@@ -345,7 +541,7 @@ export default function EmployeesPage() {
     try {
       await api.patch(`/employees/${id}/toggle-status`);
       setConfirmModal(null);
-      fetchEmployees();
+      fetchEmployees(scope);
     } catch {
       toast.error('Action failed.');
     }
@@ -355,7 +551,7 @@ export default function EmployeesPage() {
     try {
       await api.delete(`/employees/${id}`);
       setConfirmModal(null);
-      fetchEmployees();
+      fetchEmployees(scope);
     } catch {
       toast.error('Action failed.');
     }
@@ -367,7 +563,7 @@ export default function EmployeesPage() {
 
   const closeExpanded = () => {
     setExpandedEmployeeId(null);
-    fetchEmployees();
+    fetchEmployees(scope);
     fetchPayrollStatus();
   };
 
@@ -386,23 +582,57 @@ export default function EmployeesPage() {
       <div className="p-6 lg:p-8 space-y-6">
 
         {/* ── Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">
-              Staff Directory
-            </h1>
-            <p className="text-sm text-slate-400 mt-0.5">
-              {employees.length} total members
-            </p>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">
+                {isCompanyScope
+                  ? 'Company Directory'
+                  : user?.role === 'SUPER_ADMIN'
+                    ? 'All Employees'
+                    : 'People'}
+              </h1>
+              <p className="text-sm text-slate-400 mt-0.5">
+                {isCompanyScope
+                  ? `${filteredEmployees.length} people across the company · read-only`
+                  : `${filteredEmployees.length} people${visibleDepartmentCount > 0 ? ` across ${visibleDepartmentCount} department${visibleDepartmentCount === 1 ? '' : 's'}` : ''}`}
+              </p>
+            </div>
+            {!isCompanyScope && (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+              <button
+                onClick={openCreate}
+                className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
+              >
+                <UserPlus size={14} />
+                Add Employee
+              </button>
+            )}
           </div>
-          {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
-            >
-              <UserPlus size={14} />
-              Add Employee
-            </button>
+          {showScopeTabs && (
+            <div className="inline-flex w-fit items-center rounded-lg bg-slate-100 p-0.5">
+              <button
+                type="button"
+                onClick={() => changeScope('team')}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  scope === 'team'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                My Departments
+              </button>
+              <button
+                type="button"
+                onClick={() => changeScope('company')}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  scope === 'company'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Company Directory
+              </button>
+            </div>
           )}
         </div>
 
@@ -436,7 +666,7 @@ export default function EmployeesPage() {
                   </button>
                 )}
               </div>
-              {departments.length > 0 && (
+              {filterDepartments.length > 0 && (
                 <Select
                   value={departmentFilter || 'ALL'}
                   onValueChange={(value) => {
@@ -449,7 +679,7 @@ export default function EmployeesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">All departments</SelectItem>
-                    {departments.map((d) => (
+                    {filterDepartments.map((d) => (
                       <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -469,15 +699,49 @@ export default function EmployeesPage() {
                   setCurrentPage(1);
                 }}
               />
-              <div className="hidden h-4 w-px bg-slate-200 sm:block" />
-              <FilterChips
-                options={roleOptions}
-                value={roleFilter}
-                onChange={(value) => {
-                  setRoleFilter(value as typeof roleFilter);
-                  setCurrentPage(1);
-                }}
-              />
+              {isSuperAdmin && !isCompanyScope && (
+                <>
+                  <div className="hidden h-4 w-px bg-slate-200 sm:block" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUnassignedOnly((previous) => !previous);
+                      setCurrentPage(1);
+                    }}
+                    aria-pressed={showUnassignedOnly}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      showUnassignedOnly
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600'
+                    }`}
+                  >
+                    <UserX size={11} />
+                    Unassigned
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[9px] tabular-nums ${
+                        showUnassignedOnly
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {unassignedCount}
+                    </span>
+                  </button>
+                </>
+              )}
+              {!isCompanyScope && (
+                <>
+                  <div className="hidden h-4 w-px bg-slate-200 sm:block" />
+                  <FilterChips
+                    options={roleOptions}
+                    value={roleFilter}
+                    onChange={(value) => {
+                      setRoleFilter(value as typeof roleFilter);
+                      setCurrentPage(1);
+                    }}
+                  />
+                </>
+              )}
               {hasActiveFilters && (
                 <button
                   type="button"
@@ -486,6 +750,7 @@ export default function EmployeesPage() {
                     setDepartmentFilter('');
                     setStatusFilter('ALL');
                     setRoleFilter('ALL');
+                    setShowUnassignedOnly(false);
                     setCurrentPage(1);
                   }}
                   className="ml-auto text-xs font-semibold text-slate-400 transition-colors hover:text-blue-600"
@@ -495,6 +760,35 @@ export default function EmployeesPage() {
               )}
             </div>
           </div>
+
+          {selectedIds.size > 0 && canBulkAssign && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-blue-100 bg-blue-50/70 px-5 py-3">
+              <span className="text-xs font-semibold text-blue-800">
+                {selectedIds.size} selected
+              </span>
+              <button
+                type="button"
+                onClick={openBulkAssign}
+                disabled={assignableDepartments.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-lg btn-primary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Building2 size={12} />
+                Assign to department
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="rounded-lg px-2.5 py-1.5 text-xs font-semibold btn-ghost"
+              >
+                Clear selection
+              </button>
+              {assignableDepartments.length === 0 && (
+                <span className="text-[11px] text-blue-700/70">
+                  You need a managed department before you can assign employees.
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Table */}
           {loading ? (
@@ -513,6 +807,7 @@ export default function EmployeesPage() {
                     setDepartmentFilter('');
                     setStatusFilter('ALL');
                     setRoleFilter('ALL');
+                    setShowUnassignedOnly(false);
                     setCurrentPage(1);
                   }}
                   className="mt-2 text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
@@ -521,11 +816,114 @@ export default function EmployeesPage() {
                 </button>
               )}
             </div>
+          ) : isCompanyScope ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50/70 border-b border-slate-100">
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                      Employee
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest hidden sm:table-cell">
+                      ID
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest hidden lg:table-cell">
+                      Designation
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                      Department
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest hidden xl:table-cell">
+                      Joined
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest hidden xl:table-cell">
+                      Reporting manager
+                    </th>
+                    <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-center">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {paginatedEmployees.map((emp) => {
+                    const av = avatarColor(emp.name);
+                    return (
+                      <tr
+                        key={emp.id}
+                        onClick={() => setDirectoryEmployeeId(emp.id)}
+                        className="cursor-pointer transition-colors hover:bg-slate-50/60"
+                      >
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+                              style={{ backgroundColor: av.bg, color: av.text }}
+                            >
+                              {emp.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-slate-700">{emp.name}</p>
+                              <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                                <Mail size={10} />
+                                {emp.email}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 hidden sm:table-cell text-xs text-slate-500 tabular-nums">
+                          {emp.profile?.employeeCode || '—'}
+                        </td>
+                        <td className="px-5 py-3.5 hidden lg:table-cell text-sm text-slate-600">
+                          {emp.profile?.designation || '—'}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <DepartmentBadge name={emp.homeDepartment?.name || emp.department?.name} />
+                        </td>
+                        <td className="px-5 py-3.5 hidden xl:table-cell text-xs text-slate-500">
+                          {formatDateDMY(emp.profile?.joiningDate)}
+                        </td>
+                        <td className="px-5 py-3.5 hidden xl:table-cell text-xs text-slate-500">
+                          {(() => {
+                            const managers = emp.department?.managers?.map((row) => row.employee.name) ?? [];
+                            if (managers.length > 0) return managers.join(', ');
+                            return emp.manager?.name || '—';
+                          })()}
+                        </td>
+                        <td className="px-5 py-3.5 text-center">
+                          {emp.isActive ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
+                              <CheckCircle2 size={9} />
+                              Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md">
+                              <XCircle size={9} />
+                              Inactive
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-slate-50/70 border-b border-slate-100">
+                    {canBulkAssign && (
+                      <th className="w-10 py-3 pl-5 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={allPageSelected}
+                          onChange={toggleSelectAllPage}
+                          aria-label="Select all employees on this page"
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </th>
+                    )}
                     <th className="px-5 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
                       Employee
                     </th>
@@ -554,6 +952,21 @@ export default function EmployeesPage() {
                         onClick={() => toggleExpand(emp.id)}
                         className={`cursor-pointer transition-colors group ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/60'}`}
                       >
+                          {canBulkAssign && (
+                            <td
+                              className="py-3.5 pl-5 pr-2"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(emp.id)}
+                                disabled={emp.role === 'SUPER_ADMIN'}
+                                onChange={() => toggleSelect(emp.id)}
+                                aria-label={`Select ${emp.name}`}
+                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                              />
+                            </td>
+                          )}
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <div
@@ -594,6 +1007,11 @@ export default function EmployeesPage() {
                                 </p>
                               );
                             })()}
+                            {emp.managedDepartments && emp.managedDepartments.length > 0 && (
+                              <p className="mt-1 text-[10px] font-medium text-blue-500">
+                                Manages: {emp.managedDepartments.map((department) => department.name).join(', ')}
+                              </p>
+                            )}
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             {emp.isActive ? (
@@ -825,7 +1243,7 @@ export default function EmployeesPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium text-slate-600">Department</label>
-                  {departments.length === 0 ? (
+                  {creationDepartments.length === 0 ? (
                     <div className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-500">
                       Unassigned
                     </div>
@@ -834,10 +1252,14 @@ export default function EmployeesPage() {
                       <select
                         value={newEmployee.departmentId}
                         onChange={setDepartment}
+                        required={user?.role !== 'SUPER_ADMIN'}
                         className="w-full appearance-none bg-white border border-slate-200 rounded-lg py-2.5 px-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                       >
-                        <option value="">Unassigned</option>
-                        {departments.map((d) => (
+                        {user?.role === 'SUPER_ADMIN' && <option value="">Unassigned — assign later</option>}
+                        {user?.role !== 'SUPER_ADMIN' && (
+                          <option value="" disabled>Select a department</option>
+                        )}
+                        {creationDepartments.map((d) => (
                           <option key={d.id} value={d.id}>{d.name}</option>
                         ))}
                       </select>
@@ -866,7 +1288,7 @@ export default function EmployeesPage() {
                     setEmployeeCodeError(null);
                     set('employeeCode')(e);
                   }}
-                  placeholder="Auto-generated if blank (e.g. ASE-SOF-001)"
+                  placeholder="Auto-generated if blank (e.g. ACME-ENG-SWE-26001)"
                   className={`w-full bg-white border rounded-lg py-2.5 px-3 text-sm tabular-nums text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
                     employeeCodeError
                       ? 'border-red-400 ring-red-100 ring-2'
@@ -876,7 +1298,7 @@ export default function EmployeesPage() {
                 {employeeCodeError ? (
                   <p className="text-xs text-red-500 font-medium">{employeeCodeError}</p>
                 ) : (
-                  <p className="text-[10px] text-slate-400 italic">Auto-generated · Format: DES-DEP-001 · You can override this</p>
+                  <p className="text-[10px] text-slate-400 italic">Auto-generated · Format: COMPANY-DEP-DES-26001 · You can override this</p>
                 )}
               </div>
 
@@ -931,6 +1353,31 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
+              {user?.role === 'SUPER_ADMIN' &&
+                (newEmployee.role === 'ADMIN' || newEmployee.role === 'MANAGER') && (
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-slate-600">Managed departments</label>
+                    <div className="max-h-28 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      {departments.map((department) => (
+                        <label key={department.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-slate-700 hover:bg-white">
+                          <input
+                            type="checkbox"
+                            checked={newEmployee.managedDepartmentIds.includes(department.id)}
+                            onChange={() => setNewEmployee((previous) => ({
+                              ...previous,
+                              managedDepartmentIds: previous.managedDepartmentIds.includes(department.id)
+                                ? previous.managedDepartmentIds.filter((id) => id !== department.id)
+                                : [...previous.managedDepartmentIds, department.id],
+                            }))}
+                          />
+                          {department.name}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400">These are approval and administration assignments; home department remains separate.</p>
+                  </div>
+                )}
+
               {/* Reporting managers are assigned at the department level. */}
               <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5">
                 <p className="text-xs font-medium text-blue-800">Reporting manager</p>
@@ -963,6 +1410,111 @@ export default function EmployeesPage() {
         </div>
       )}
 
+      {/* ── Bulk Assign Modal */}
+      {bulkAssignOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">
+                  Assign to department
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Move {selectedIds.size} selected employee{selectedIds.size === 1 ? '' : 's'} to a home department.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBulkAssignOpen(false)}
+                className="rounded-md p-1.5 btn-ghost"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/50">
+                {selectedEmployees.slice(0, 8).map((employee) => (
+                  <div
+                    key={employee.id}
+                    className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-700">
+                        {employee.name}
+                      </p>
+                      <p className="truncate text-[10px] text-slate-400">{employee.email}</p>
+                    </div>
+                    <DepartmentBadge
+                      name={employee.department?.name || employee.profile?.department}
+                    />
+                  </div>
+                ))}
+                {selectedEmployees.length > 8 && (
+                  <p className="px-3 py-2 text-[11px] font-medium text-slate-400">
+                    and {selectedEmployees.length - 8} more selected
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-600">
+                  Target department
+                </label>
+                <div className="relative">
+                  <select
+                    value={bulkDepartmentId}
+                    onChange={(event) => setBulkDepartmentId(event.target.value)}
+                    className="w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 pr-8 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="">Choose a department</option>
+                    {assignableDepartments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={13}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2.5">
+                <p className="text-xs font-medium text-amber-800">
+                  {selectedWithHome > 0
+                    ? `${selectedWithHome} selected employee${selectedWithHome === 1 ? ' has' : 's have'} a home department.`
+                    : 'These employees are currently unassigned.'}
+                </p>
+                <p className="mt-0.5 text-[11px] text-amber-700/80">
+                  Their home department will be replaced. Managed departments stay unchanged.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setBulkAssignOpen(false)}
+                className="flex-1 border-r border-slate-100 px-4 py-3 text-sm font-semibold btn-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkAssign}
+                disabled={!bulkDepartmentId || bulkAssigning}
+                className="inline-flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-semibold btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {bulkAssigning && <Loader2 size={13} className="animate-spin" />}
+                Assign employees
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Credentials Share Modal */}
       <CredentialsShareModal
         isOpen={!!createdCredentials}
@@ -982,6 +1534,14 @@ export default function EmployeesPage() {
             canManage={canManageEmployee(expandedEmployee)}
             onClose={closeExpanded}
             avatarColor={avatarColor(expandedEmployee.name)}
+          />
+        )}
+        {directoryEmployee && (
+          <EmployeeDirectoryDrawer
+            key={`directory-${directoryEmployee.id}`}
+            employeeId={directoryEmployee.id}
+            onClose={() => setDirectoryEmployeeId(null)}
+            avatarColor={avatarColor(directoryEmployee.name)}
           />
         )}
       </AnimatePresence>
