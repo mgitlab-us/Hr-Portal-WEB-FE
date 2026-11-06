@@ -32,6 +32,7 @@ interface LeaveBalanceCategory {
   carryForward: number;
   total: number;
   used: number;
+  unpaid?: number;
   remaining: number;
 }
 
@@ -39,6 +40,14 @@ const formatDateOnly = (value?: string) => {
   if (!value) return '';
   return formatDateDMY(value);
 };
+
+function leaveRequestDayCount(req: LeaveRequest) {
+  if (req.duration && req.duration !== 'FULL_DAY') return 0.5;
+  const start = new Date(req.startDate).getTime();
+  const end = new Date(req.endDate).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
+  return Math.floor((end - start) / 86_400_000) + 1;
+}
 
 interface LeaveBalances {
   year: number;
@@ -537,6 +546,19 @@ export default function LeavesPage() {
                   const color = avatarColor(req.employee.name);
                   const isProcessing = processingId === req.id;
                   const isManagerStage = req.approvalStage === 'MANAGER';
+                  const requestDays = leaveRequestDayCount(req);
+                  const typeBalance =
+                    req.type === 'SICK'
+                      ? req.balances?.sick
+                      : req.type === 'CASUAL'
+                      ? req.balances?.casual
+                      : req.type === 'VACATION'
+                      ? req.balances?.vacation
+                      : undefined;
+                  const overQuotaDays =
+                    req.type === 'OTHER' || !req.balances
+                      ? 0
+                      : Math.max(0, requestDays - (typeBalance?.remaining ?? 0));
 
                   return (
                     <div
@@ -653,6 +675,9 @@ export default function LeavesPage() {
                               : 'border-slate-200 bg-white text-slate-600'
                           }`}>
                             Sick: {req.balances.sick.remaining} / {req.balances.sick.total} days
+                            {req.balances.sick.unpaid ? (
+                              <span className="text-rose-600"> · {req.balances.sick.unpaid} unpaid</span>
+                            ) : null}
                           </span>
                           <span className={`rounded border px-2 py-0.5 text-[10px] font-bold ${
                             req.type === 'CASUAL'
@@ -660,6 +685,9 @@ export default function LeavesPage() {
                               : 'border-slate-200 bg-white text-slate-600'
                           }`}>
                             Casual: {req.balances.casual.remaining} / {req.balances.casual.total} days
+                            {req.balances.casual.unpaid ? (
+                              <span className="text-rose-600"> · {req.balances.casual.unpaid} unpaid</span>
+                            ) : null}
                           </span>
                           <span className={`rounded border px-2 py-0.5 text-[10px] font-bold ${
                             req.type === 'VACATION'
@@ -667,7 +695,17 @@ export default function LeavesPage() {
                               : 'border-slate-200 bg-white text-slate-600'
                           }`}>
                             Annual: {req.balances.vacation.remaining} / {req.balances.vacation.total} days
+                            {req.balances.vacation.unpaid ? (
+                              <span className="text-rose-600"> · {req.balances.vacation.unpaid} unpaid</span>
+                            ) : null}
                           </span>
+                          {(req.type === 'OTHER' || overQuotaDays > 0) && (
+                            <span className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                              {req.type === 'OTHER'
+                                ? 'Other leave is unpaid'
+                                : `${overQuotaDays} day${overQuotaDays === 1 ? '' : 's'} of this request will be unpaid`}
+                            </span>
+                          )}
                           <span className="ml-auto text-[10px] font-medium text-slate-400">
                             Cycle ends {formatDateOnly(req.balances.cycleEnd)}
                           </span>

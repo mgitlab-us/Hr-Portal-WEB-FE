@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import {
@@ -79,6 +79,23 @@ function CorrectionsContent() {
   const [successMsg, setSuccessMsg] = useState('');
   const [showModal, setShowModal] = useState(() => Boolean(prefillRecordId));
 
+  const effectiveSelectedRecordId = useMemo(() => {
+    if (selectedRecordId) return selectedRecordId;
+
+    if (prefillRecordId) return prefillRecordId;
+
+    if (prefillDate && recentRecords.length) {
+      const sameDateRecord = recentRecords.find((record) => {
+        if (!record.date) return false;
+        return new Date(record.date).toISOString().slice(0, 10) === new Date(prefillDate).toISOString().slice(0, 10);
+      });
+
+      return sameDateRecord?.id ?? '';
+    }
+
+    return '';
+  }, [prefillDate, prefillRecordId, recentRecords, selectedRecordId]);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -102,31 +119,14 @@ function CorrectionsContent() {
     loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    if (!recentRecords.length) return;
-
-    if (prefillRecordId) {
-      setSelectedRecordId(prefillRecordId);
-      return;
-    }
-
-    if (prefillDate) {
-      const sameDateRecord = recentRecords.find((record) => {
-        if (!record.date) return false;
-        return new Date(record.date).toISOString().slice(0, 10) === new Date(prefillDate).toISOString().slice(0, 10);
-      });
-      if (sameDateRecord) setSelectedRecordId(sameDateRecord.id);
-    }
-  }, [recentRecords, prefillDate, prefillRecordId]);
-
-  const selectedRecord = recentRecords.find((r) => r.id === selectedRecordId);
+  const selectedRecord = recentRecords.find((r) => r.id === effectiveSelectedRecordId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!selectedRecordId) {
+    if (!effectiveSelectedRecordId) {
       setErrorMsg('Please select an attendance record to correct.');
       return;
     }
@@ -150,7 +150,7 @@ function CorrectionsContent() {
         : undefined;
 
       await api.post('/corrections/request', {
-        recordId: selectedRecordId,
+        recordId: effectiveSelectedRecordId,
         requestedCheckin: checkinIso,
         requestedCheckout: checkoutIso,
         reason: reason.trim(),
@@ -323,7 +323,7 @@ function CorrectionsContent() {
                 </label>
                 <select
                   required
-                  value={selectedRecordId}
+                  value={effectiveSelectedRecordId}
                   onChange={(e) => setSelectedRecordId(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                 >

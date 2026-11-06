@@ -22,6 +22,7 @@ import {
 } from 'recharts';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
+import { getSocketUrl } from '@/lib/socketUrl';
 import { formatDateDMY, formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import HeaderActions, { type NotificationItem } from '@/components/layout/HeaderActions';
@@ -172,8 +173,8 @@ const checkinChartConfig = {
   avgCheckinMinutes: { label: 'Avg check-in', color: 'var(--chart-1)' },
 } satisfies ChartConfig;
 
-function classifyStatus(status: string): Bucket {
-  const s = status?.toUpperCase();
+function classifyStatus(status?: string): Bucket {
+  const s = status?.toUpperCase() ?? '';
   if (s === 'LATE') return 'late';
   if (s === 'ABSENT') return 'absent';
   if (s === 'PRESENT' || s === 'ON-TIME') return 'onTime';
@@ -302,7 +303,15 @@ export default function DashboardOverview() {
     attendanceChange: null as number | null,
   });
   const [pulse, setPulse] = useState<PulseItem[]>([]);
-  const [trendData, setTrendData] = useState<any[]>([]);
+  const [trendData, setTrendData] = useState<Array<{
+    date: string;
+    label: string;
+    onTime: number;
+    late: number;
+    absent: number;
+    leave: number;
+    avgCheckinMinutes: number | null;
+  }>>([]);
   const [isOverviewLoading, setIsOverviewLoading] = useState(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [drilldownMetric, setDrilldownMetric] = useState<DrilldownMetric | null>(null);
@@ -354,7 +363,7 @@ export default function DashboardOverview() {
           let checkinMinutesSum = 0;
           let checkinCount = 0;
 
-          logs.forEach((log: any) => {
+          logs.forEach((log: { status?: string; checkinAt?: string | null }) => {
             counts[classifyStatus(log.status)] += 1;
             if (log.checkinAt) {
               const t = new Date(log.checkinAt);
@@ -395,10 +404,21 @@ export default function DashboardOverview() {
       }, 4000);
     };
 
-    const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1').replace(/\/api\/v1$/, '');
-    const socket = io(socketUrl, {
-      auth: { token: useAuthStore.getState().accessToken },
-      transports: ['websocket'],
+    const socket = io(getSocketUrl(), {
+      // Resolve the token at handshake/reconnect time. The Axios interceptor
+      // refreshes localStorage but not the Zustand snapshot, so a token grabbed
+      // once at mount would make every reconnect fail after a refresh.
+      auth: (cb) =>
+        cb({
+          token: localStorage.getItem('accessToken') || useAuthStore.getState().accessToken,
+        }),
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+    });
+
+    socket.on('connect', () => {
+      // Catch up on activity that happened while the socket was offline.
+      scheduleDashboardRefresh();
     });
 
     const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
