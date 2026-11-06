@@ -17,8 +17,8 @@ interface User {
   id: string;
   email: string;
   name: string;
-  role: 'EMPLOYEE' | 'MANAGER' | 'ADMIN' | 'SUPER_ADMIN';
-  companyId: string;
+  role: 'EMPLOYEE' | 'MANAGER' | 'ADMIN' | 'SUPER_ADMIN' | 'PLATFORM_ADMIN';
+  companyId?: string;
   departmentId?: string | null;
   department?: string | null;
   employeeCode?: string | null;

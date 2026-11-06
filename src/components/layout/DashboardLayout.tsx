@@ -18,6 +18,7 @@ import {
   Megaphone,
   Wallet,
   ScrollText,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
@@ -60,6 +61,12 @@ const superAdminNavItems: NavEntry[] = [
   { href: '/dashboard/departments', icon: Building2, label: 'Departments' },
 ];
 
+const adminDepartmentSetupNavItem: NavEntry = {
+  href: '/dashboard/settings/departments',
+  icon: Building2,
+  label: 'Department Setup',
+};
+
 /**
  * Role-aware nav list, shared by the sidebar and the header quick-search.
  *
@@ -75,27 +82,50 @@ export function getNavItems(role?: string | null): NavEntry[] {
       ...baseNavItems.filter((item) => item.label === 'Overview'),
       ...superAdminNavItems,
       ...baseNavItems.filter((item) =>
-        ['Attendance', 'Employees', 'Groups', 'Payroll', 'Analytics', 'Notice Board', 'Audit Logs', 'Company Setup'].includes(
-          item.label
-        )
+        [
+          'Attendance',
+          'Employees',
+          'Groups',
+          'Payroll',
+          'Analytics',
+          'Notice Board',
+          'Corrections',
+          'Leaves',
+          'Audit Logs',
+          'Company Setup',
+        ].includes(item.label)
       ).sort((a, b) => {
-        const order = ['Attendance', 'Employees', 'Groups', 'Payroll', 'Analytics', 'Notice Board', 'Audit Logs', 'Company Setup'];
+        const order = [
+          'Attendance',
+          'Employees',
+          'Groups',
+          'Payroll',
+          'Analytics',
+          'Notice Board',
+          'Corrections',
+          'Leaves',
+          'Audit Logs',
+          'Company Setup',
+        ];
         return order.indexOf(a.label) - order.indexOf(b.label);
       }),
-    ].filter((item) => !['Corrections', 'Leaves'].includes(item.label));
+    ];
   }
 
   if (role === 'ADMIN') {
     return [
-      ...baseNavItems.filter((item) => item.label === 'Overview'),
-      ...superAdminNavItems,
-      ...baseNavItems.filter((item) =>
-        ['Attendance', 'Employees', 'Groups', 'Payroll', 'Analytics', 'Notice Board'].includes(item.label)
-      ).sort((a, b) => {
-        const order = ['Attendance', 'Employees', 'Groups', 'Payroll', 'Analytics', 'Notice Board'];
-        return order.indexOf(a.label) - order.indexOf(b.label);
-      }),
-    ].filter((item) => item.label !== 'Audit Logs' && item.label !== 'Company Setup');
+      ...baseNavItems
+        .filter((item) =>
+          ['Overview', 'Attendance', 'Employees', 'Groups', 'Analytics', 'Notice Board', 'Corrections', 'Leaves'].includes(
+            item.label
+          )
+        )
+        .sort((a, b) => {
+          const order = ['Overview', 'Attendance', 'Employees', 'Groups', 'Analytics', 'Notice Board', 'Corrections', 'Leaves'];
+          return order.indexOf(a.label) - order.indexOf(b.label);
+        }),
+      adminDepartmentSetupNavItem,
+    ];
   }
 
   if (role === 'MANAGER') {
@@ -113,6 +143,74 @@ export function getNavItems(role?: string | null): NavEntry[] {
 function isActivePath(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Strict RBAC route guard for web console dashboard.
+ * Prevents unauthorized roles (e.g. MANAGER or ADMIN) from accessing restricted
+ * pages (such as /dashboard/payroll, /dashboard/audit-logs, /dashboard/settings)
+ * simply by typing the URL.
+ */
+export function isRouteAllowedForRole(pathname: string, role?: string | null): boolean {
+  if (!role) return false;
+  if (role === 'SUPER_ADMIN') return true;
+  if (role === 'EMPLOYEE') return false;
+
+  const cleanPath = pathname.split('?')[0].replace(/\/+$/, '') || '/dashboard';
+
+  // Routes strictly restricted to SUPER_ADMIN only
+  const superAdminOnlyRoutes = [
+    '/dashboard/payroll',
+    '/dashboard/audit-logs',
+    '/dashboard/settings',
+    '/dashboard/departments',
+  ];
+
+  if (
+    superAdminOnlyRoutes.some(
+      (route) =>
+        cleanPath === route ||
+        (cleanPath.startsWith(route) && cleanPath !== '/dashboard/settings/departments')
+    )
+  ) {
+    return false;
+  }
+
+  // Routes forbidden for MANAGER
+  if (role === 'MANAGER') {
+    const managerForbiddenRoutes = [
+      '/dashboard/settings/departments',
+      '/dashboard/groups',
+      '/dashboard/shifts',
+      '/dashboard/holidays',
+    ];
+    if (managerForbiddenRoutes.some((route) => cleanPath === route || cleanPath.startsWith(`${route}/`))) {
+      return false;
+    }
+  }
+
+  // Allowed baseline for authenticated dashboard users
+  const baseAllowedPrefixes = [
+    '/dashboard',
+    '/dashboard/attendance',
+    '/dashboard/employees',
+    '/dashboard/analytics',
+    '/dashboard/notice-board',
+    '/dashboard/corrections',
+    '/dashboard/leaves',
+    '/dashboard/profile',
+  ];
+
+  if (role === 'ADMIN') {
+    baseAllowedPrefixes.push(
+      '/dashboard/settings/departments',
+      '/dashboard/groups',
+      '/dashboard/shifts',
+      '/dashboard/holidays'
+    );
+  }
+
+  return baseAllowedPrefixes.some((prefix) => cleanPath === prefix || cleanPath.startsWith(`${prefix}/`));
 }
 
 // ── Tooltip shown when the rail is collapsed to icons
@@ -340,14 +438,23 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
   };
 
   // Redirect if not logged in once hydration is settled.
-  // Also redirect employees away from admin console to their portal.
+  // Also redirect employees away from admin console to their portal,
+  // and redirect unauthorized roles away from restricted dashboard pages.
   React.useEffect(() => {
-    if (authHydrated && !user) {
-      router.replace('/login');
-    } else if (authHydrated && user?.role === 'EMPLOYEE') {
-      router.replace('/portal');
+    if (!authHydrated || !user) {
+      if (authHydrated && !user) router.replace('/login');
+      return;
     }
-  }, [authHydrated, user, router]);
+
+    if (user.role === 'EMPLOYEE') {
+      router.replace('/portal');
+      return;
+    }
+
+    if (!isRouteAllowedForRole(pathname, user.role)) {
+      router.replace('/dashboard');
+    }
+  }, [authHydrated, user, pathname, router]);
 
   // Refresh branding from the settings endpoint for admins only. Managers get
   // a 403 from that admin-guarded route, so they use the session payload.
@@ -360,7 +467,7 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
         const res = await api.get('/attendance/settings/company-profile');
         if (cancelled) return;
         setProfileBranding({
-          companyId: user.companyId,
+          companyId: user.companyId || '',
           logo: res.data?.logo ?? null,
           name: res.data?.name || user.company?.name || 'TapIn',
         });
@@ -378,6 +485,26 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas">
         <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[#2563EB]" />
+      </div>
+    );
+  }
+
+  const routeAllowed = isRouteAllowedForRole(pathname, user.role);
+
+  if (!routeAllowed) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-canvas p-4 font-sans">
+        <div className="flex flex-col items-center gap-3 p-8 bg-white rounded-3xl shadow-xl border border-line max-w-sm text-center">
+          <div className="h-14 w-14 rounded-2xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center shadow-xs">
+            <ShieldAlert size={28} />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-ink tracking-tight">Access Restricted</h2>
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              Your role (<strong className="text-ink">{user.role}</strong>) does not have permission to access this page. Redirecting to your dashboard...
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
