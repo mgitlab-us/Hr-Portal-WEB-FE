@@ -37,6 +37,7 @@ interface LeaveRequestItem {
 interface LeaveBalanceCategory {
   total: number;
   used: number;
+  unpaid?: number;
   remaining: number;
 }
 
@@ -44,7 +45,7 @@ interface LeaveBalancesResponse {
   sick?: LeaveBalanceCategory;
   casual?: LeaveBalanceCategory;
   vacation?: LeaveBalanceCategory;
-  otherUsed?: number;
+  other?: { used: number };
 }
 
 interface CalendarLeaveItem {
@@ -75,6 +76,19 @@ function extractErrorMessage(err: unknown, defaultMsg: string): string {
   return errorObj?.response?.data?.message || errorObj?.message || defaultMsg;
 }
 
+function UnpaidNote({ days }: { days?: number }) {
+  if (!days || days <= 0) return null;
+  return <span className="font-semibold text-rose-600"> · {days} unpaid</span>;
+}
+
+function leaveDayCount(start: string, end: string, duration: LeaveDuration) {
+  if (duration !== 'FULL_DAY') return 0.5;
+  const startTime = new Date(`${start}T00:00:00.000Z`).getTime();
+  const endTime = new Date(`${end}T00:00:00.000Z`).getTime();
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime < startTime) return 0;
+  return Math.floor((endTime - startTime) / 86_400_000) + 1;
+}
+
 export default function MyLeavesPage() {
   const [activeTab, setActiveTab] = useState<'MY_LEAVES' | 'TEAM_CALENDAR'>('MY_LEAVES');
   const [balances, setBalances] = useState<LeaveBalancesResponse | null>(null);
@@ -98,6 +112,20 @@ export default function MyLeavesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  const requestedDays = leaveDayCount(formStartDate, formEndDate, formDuration);
+  const selectedQuota =
+    formType === 'SICK'
+      ? balances?.sick
+      : formType === 'CASUAL'
+      ? balances?.casual
+      : formType === 'VACATION'
+      ? balances?.vacation
+      : undefined;
+  const overQuotaDays =
+    formType === 'OTHER' || !balances
+      ? 0
+      : Math.max(0, requestedDays - (selectedQuota?.remaining ?? 0));
 
   const loadData = useCallback(async () => {
     try {
@@ -287,6 +315,7 @@ export default function MyLeavesPage() {
           </div>
           <div className="mt-2 text-xs text-slate-500">
             {balances?.casual?.used ?? 0} days used this cycle
+            <UnpaidNote days={balances?.casual?.unpaid} />
           </div>
         </div>
 
@@ -301,6 +330,7 @@ export default function MyLeavesPage() {
           </div>
           <div className="mt-2 text-xs text-slate-500">
             {balances?.sick?.used ?? 0} days used this cycle
+            <UnpaidNote days={balances?.sick?.unpaid} />
           </div>
         </div>
 
@@ -315,6 +345,7 @@ export default function MyLeavesPage() {
           </div>
           <div className="mt-2 text-xs text-slate-500">
             {balances?.vacation?.used ?? 0} days used this cycle
+            <UnpaidNote days={balances?.vacation?.unpaid} />
           </div>
         </div>
 
@@ -324,14 +355,18 @@ export default function MyLeavesPage() {
             <span className="p-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold">Special</span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-slate-900">{balances?.otherUsed ?? 0}</span>
+            <span className="text-3xl font-black text-slate-900">{balances?.other?.used ?? 0}</span>
             <span className="text-xs text-slate-400 font-medium">days taken</span>
           </div>
           <div className="mt-2 text-xs text-slate-500">
-            Subject to HR policy
+            Always unpaid
           </div>
         </div>
       </div>
+      <p className="text-[11px] font-medium text-slate-500">
+        Days beyond a leave category&apos;s balance are recorded as unpaid. They are never
+        automatically taken from another category.
+      </p>
 
       {/* Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
@@ -577,6 +612,14 @@ export default function MyLeavesPage() {
                   </div>
                 )}
               </div>
+
+              {(overQuotaDays > 0 || formType === 'OTHER') && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-800">
+                  {formType === 'OTHER'
+                    ? 'Other leave is unpaid.'
+                    : `${overQuotaDays} day${overQuotaDays === 1 ? '' : 's'} exceed your ${formType.toLowerCase()} balance and will be recorded as unpaid.`}
+                </div>
+              )}
 
               {/* Reason */}
               <div>
