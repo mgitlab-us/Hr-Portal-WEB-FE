@@ -40,6 +40,19 @@ interface YTDStats {
   net: number;
 }
 
+interface PayslipApiResponse {
+  grossSalary?: number;
+  grossAmount?: number;
+  netSalary?: number;
+  netAmount?: number;
+  amount?: number;
+  totalDeductions?: number;
+  paymentStatus?: string;
+  status?: string;
+  paidAt?: string | null;
+  paymentDate?: string | null;
+}
+
 const formatCurrency = (amount?: number | null) => {
   return (amount ?? 0).toLocaleString('en-US', {
     minimumFractionDigits: 2,
@@ -65,7 +78,7 @@ export default function MyPayslipsPage() {
       setLoading(true);
       setErrorMsg('');
       const res = await api.get('/salary/me/payslips');
-      const normalizedPayments = (res.data?.payments || []).map((slip: any) => ({
+      const normalizedPayments = (res.data?.payments || []).map((slip: PayslipApiResponse) => ({
         ...slip,
         grossSalary: slip.grossSalary ?? slip.grossAmount ?? 0,
         netSalary: slip.netSalary ?? slip.netAmount ?? slip.amount ?? 0,

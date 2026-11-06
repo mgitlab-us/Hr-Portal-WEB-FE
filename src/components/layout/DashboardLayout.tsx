@@ -72,17 +72,29 @@ const superAdminNavItems: NavEntry[] = [
 export function getNavItems(role?: string | null): NavEntry[] {
   if (role === 'SUPER_ADMIN') {
     return [
-      ...baseNavItems.slice(0, 2),
+      ...baseNavItems.filter((item) => item.label === 'Overview'),
       ...superAdminNavItems,
-      ...baseNavItems.slice(2),
+      ...baseNavItems.filter((item) =>
+        ['Attendance', 'Employees', 'Groups', 'Payroll', 'Analytics', 'Notice Board', 'Audit Logs', 'Company Setup'].includes(
+          item.label
+        )
+      ).sort((a, b) => {
+        const order = ['Attendance', 'Employees', 'Groups', 'Payroll', 'Analytics', 'Notice Board', 'Audit Logs', 'Company Setup'];
+        return order.indexOf(a.label) - order.indexOf(b.label);
+      }),
     ].filter((item) => !['Corrections', 'Leaves'].includes(item.label));
   }
 
   if (role === 'ADMIN') {
     return [
-      ...baseNavItems.slice(0, 2),
+      ...baseNavItems.filter((item) => item.label === 'Overview'),
       ...superAdminNavItems,
-      ...baseNavItems.slice(2),
+      ...baseNavItems.filter((item) =>
+        ['Attendance', 'Employees', 'Groups', 'Payroll', 'Analytics', 'Notice Board'].includes(item.label)
+      ).sort((a, b) => {
+        const order = ['Attendance', 'Employees', 'Groups', 'Payroll', 'Analytics', 'Notice Board'];
+        return order.indexOf(a.label) - order.indexOf(b.label);
+      }),
     ].filter((item) => item.label !== 'Audit Logs' && item.label !== 'Company Setup');
   }
 
@@ -294,8 +306,18 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
   const { user } = useAuthStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isCollapsed, setIsCollapsed] = React.useState<boolean>(getInitialCollapsedState);
-  const [orgLogo, setOrgLogo] = React.useState<string | null>(null);
-  const [orgName, setOrgName] = React.useState<string>('TapIn');
+  const [profileBranding, setProfileBranding] = React.useState<{
+    companyId: string;
+    logo: string | null;
+    name: string;
+  } | null>(null);
+
+  // Prefer the freshly fetched profile for the current company, then fall back
+  // to the values already present in the session payload.
+  const branding =
+    profileBranding && profileBranding.companyId === user?.companyId ? profileBranding : null;
+  const orgLogo = branding?.logo ?? user?.company?.logo ?? null;
+  const orgName = branding?.name ?? user?.company?.name ?? 'TapIn';
 
   // Wait for Zustand persist hydration before deciding whether a session
   // exists. Checking the raw `auth-storage` key is unreliable: logout writes a
@@ -327,16 +349,21 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
     }
   }, [authHydrated, user, router]);
 
-  // Fetch the organisation's branding (logo + name) once a user is present.
+  // Refresh branding from the settings endpoint for admins only. Managers get
+  // a 403 from that admin-guarded route, so they use the session payload.
   React.useEffect(() => {
     if (!user) return;
+    if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') return;
     let cancelled = false;
     const fetchProfile = async () => {
       try {
         const res = await api.get('/attendance/settings/company-profile');
         if (cancelled) return;
-        if (res.data?.logo) setOrgLogo(res.data.logo);
-        if (res.data?.name) setOrgName(res.data.name);
+        setProfileBranding({
+          companyId: user.companyId,
+          logo: res.data?.logo ?? null,
+          name: res.data?.name || user.company?.name || 'TapIn',
+        });
       } catch (err) {
         console.error(err);
       }
