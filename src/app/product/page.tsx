@@ -107,14 +107,6 @@ const footerColumns = [
 
 /* ---------- Small helpers ---------- */
 
-function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
-      {children}
-    </span>
-  );
-}
-
 function LinkedInIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
@@ -202,8 +194,6 @@ export default function ProductLandingPage() {
           <div className="relative grid items-center gap-8 pb-16 pt-6 lg:min-h-[520px] lg:grid-cols-2 lg:pb-20">
             {/* Copy */}
             <div className="relative z-10">
-              <Pill>Modern HRMS Platform</Pill>
-
               <h1 className="mt-5 text-4xl font-bold leading-[1.1] tracking-tight text-slate-950 sm:text-5xl xl:text-6xl">
                 One Platform.
                 <br />
@@ -294,7 +284,6 @@ export default function ProductLandingPage() {
       {/* ===== Features ===== */}
       <section id="features" className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="text-center">
-          <Pill>Powerful Features</Pill>
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">
             Everything You Need in <span className="text-blue-600">One Place</span>
           </h2>
@@ -412,7 +401,6 @@ export default function ProductLandingPage() {
 
           {/* Copy */}
           <div className="lg:pl-8">
-            <Pill>Smart Dashboard</Pill>
             <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-slate-950 sm:text-4xl">
               Get Complete <span className="text-blue-600">Visibility</span>
               <br />
@@ -438,7 +426,6 @@ export default function ProductLandingPage() {
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.4fr_0.6fr] lg:px-8">
           <div>
             <div className="text-center">
-              <Pill>How It Works</Pill>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">
                 Get Started in Three Simple Steps
               </h2>

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { ShieldCheck, Mail, KeyRound, ArrowRight, Loader2, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Mail, KeyRound, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function PlatformAdminLoginPage() {
   const router = useRouter();
@@ -187,7 +187,6 @@ export default function PlatformAdminLoginPage() {
                   </>
                 ) : (
                   <>
-                    <Sparkles size={16} />
                     <span>Verify &amp; Enter Console</span>
                   </>
                 )}
