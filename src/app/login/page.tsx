@@ -107,7 +107,16 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const errParam = searchParams.get('error');
+      if (errParam) {
+        return decodeURIComponent(errParam);
+      }
+    }
+    return '';
+  });
 
   useEffect(() => {
     if (user && accessToken) {
@@ -172,8 +181,9 @@ export default function LoginPage() {
   return (
     <main className="relative min-h-svh w-full overflow-hidden bg-[#f2f6ff] tracking-normal antialiased lg:h-svh lg:min-h-[680px]">
 
-      {/* ===== Brand panel (diagonal right edge) ===== */}
-      <aside className="absolute inset-y-0 left-0 z-10 hidden w-[65%] flex-col overflow-hidden bg-[#071b4b] px-12 pt-9 text-white lg:flex xl:px-16">
+      {/* ===== Brand panel (diagonal right edge) =====
+          58% on mid screens, 65% on xl+. Keep in sync with the diagonal SVG and form section. */}
+      <aside className="absolute inset-y-0 left-0 z-10 hidden w-[58%] flex-col overflow-hidden bg-[#071b4b] px-12 pt-9 text-white lg:flex xl:w-[65%] xl:px-16">
 
         {/* Photo */}
         <Image
@@ -181,7 +191,7 @@ export default function LoginPage() {
           alt=""
           fill
           priority
-          sizes="65vw"
+          sizes="(min-width: 1280px) 65vw, 58vw"
           className="object-cover object-[75%_25%]"
         />
 
@@ -295,12 +305,14 @@ export default function LoginPage() {
         </p>
       </aside>
 
-      {/* Diagonal edge: rendered as a vector shape so it stays smooth (clip-path / image edges alias) */}
+      {/* Diagonal edge: vector shape so it stays smooth.
+          Intentionally 2px wider than the brand panel so its right edge always
+          covers the panel's edge (prevents the 1px vertical seam on fractional widths). */}
       <svg
         aria-hidden="true"
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
-        className="pointer-events-none absolute inset-y-0 left-0 z-[11] hidden w-[65%] lg:block"
+        className="pointer-events-none absolute inset-y-0 left-0 z-[11] hidden w-[calc(58%+2px)] lg:block xl:w-[calc(65%+2px)]"
       >
         <path d="M100 0L91 100H100Z" fill="#f2f6ff" />
         <path
@@ -316,8 +328,10 @@ export default function LoginPage() {
       <CornerWaves position="top" />
       <CornerWaves position="bottom" />
 
-      {/* ===== Sign-in panel ===== */}
-      <section className="relative z-20 flex min-h-svh items-center justify-center px-6 py-10 sm:px-10 lg:ml-auto lg:h-full lg:min-h-0 lg:w-[38%] lg:px-8">
+      {/* ===== Sign-in panel =====
+          Starts exactly where the brand panel ends (42% = 100% - 58%, 35% = 100% - 65%),
+          so the card can never overlap the navy area. */}
+      <section className="relative z-20 flex min-h-svh items-center justify-center px-6 py-10 sm:px-10 lg:ml-auto lg:h-full lg:min-h-0 lg:w-[42%] lg:px-8 xl:w-[35%] xl:px-10">
 
         <div className="relative w-full max-w-[430px]">
 

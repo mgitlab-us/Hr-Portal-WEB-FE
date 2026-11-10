@@ -21,6 +21,7 @@ interface CorrectionRequest {
   createdAt: string;
   employee: {
     name: string;
+    role?: string;
     profile?: { designation: string; department?: string };
     department?: { name: string };
   };
@@ -96,6 +97,9 @@ function CorrectionCard({
   onReview: (id: string, status: 'APPROVED' | 'REJECTED') => void;
 }) {
   const color = avatarColor(req.employee.name);
+  const isOwnerApproval =
+    req.approvalStage === 'HR' &&
+    (req.employee.role === 'ADMIN' || req.employee.role === 'MANAGER');
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl overflow-hidden hover:shadow-md hover:border-slate-200 transition-all duration-200">
@@ -121,6 +125,11 @@ function CorrectionCard({
             {req.approvalStage === 'MANAGER' && (
               <span className="hidden rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700 sm:inline">
                 Stage 1 · Manager
+              </span>
+            )}
+            {isOwnerApproval && (
+              <span className="hidden rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-700 sm:inline">
+                Owner approval
               </span>
             )}
             <Calendar size={11} className="text-slate-300" />
@@ -169,7 +178,9 @@ function CorrectionCard({
                 ? <Loader2 size={12} className="animate-spin" />
                 : <Check size={12} />
               }
-              <span className="hidden sm:inline">Approve</span>
+              <span className="hidden sm:inline">
+                {isOwnerApproval ? 'Approve as Owner' : 'Approve'}
+              </span>
             </button>
           </div>
         </div>

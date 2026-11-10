@@ -83,6 +83,7 @@ interface LeaveRequest {
   attachment?: LeaveAttachment | null;
   employee: {
     name: string;
+    role?: string;
     profile?: {
       employeeCode: string;
       department: string;
@@ -546,6 +547,9 @@ export default function LeavesPage() {
                   const color = avatarColor(req.employee.name);
                   const isProcessing = processingId === req.id;
                   const isManagerStage = req.approvalStage === 'MANAGER';
+                  const isOwnerApproval =
+                    req.approvalStage === 'HR' &&
+                    (req.employee.role === 'ADMIN' || req.employee.role === 'MANAGER');
                   const requestDays = leaveRequestDayCount(req);
                   const typeBalance =
                     req.type === 'SICK'
@@ -640,6 +644,11 @@ export default function LeavesPage() {
                               Stage 1 · Manager
                             </span>
                           )}
+                          {isOwnerApproval && (
+                            <span className="hidden rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-blue-700 sm:inline">
+                              Owner approval
+                            </span>
+                          )}
                           <button
                             onClick={() => handleReview(req.id, 'REJECTED')}
                             disabled={isProcessing}
@@ -658,7 +667,11 @@ export default function LeavesPage() {
                             ) : (
                               <Check size={13} />
                             )}
-                            {isManagerStage ? 'Approve & send to HR' : 'Approve'}
+                            {isManagerStage
+                              ? 'Approve & send to HR'
+                              : isOwnerApproval
+                                ? 'Approve as Owner'
+                                : 'Approve'}
                           </button>
                         </div>
                       </div>

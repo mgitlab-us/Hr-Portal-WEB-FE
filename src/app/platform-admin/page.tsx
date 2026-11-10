@@ -9,19 +9,26 @@ import {
   Search,
   RefreshCw,
   LogOut,
-  Calendar,
   Globe,
-  Layers,
-  ShieldCheck,
   Mail,
   Copy,
   Check,
-  TrendingUp,
-  Power,
-  PowerOff,
   Loader2,
   AlertTriangle,
+  UserCheck,
+  XCircle,
+  CheckCircle,
+  Clock,
+  FileText,
+  ShieldCheck,
+  ShieldOff,
+  X,
+  Inbox,
+  ArrowRight,
+  Layers,
 } from 'lucide-react';
+
+/* ----------------------------- Types ----------------------------- */
 
 interface CompanyItem {
   id: string;
@@ -41,6 +48,20 @@ interface CompanyItem {
   };
 }
 
+interface OnboardingRequestItem {
+  id: string;
+  companyName: string;
+  timezone: string;
+  adminName: string;
+  adminEmail: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface PlatformAdminUser {
   id: string;
   email: string;
@@ -48,15 +69,275 @@ interface PlatformAdminUser {
   role: string;
 }
 
+type Tab = 'ORGANIZATIONS' | 'ONBOARDING';
+type CompanyFilter = 'ALL' | 'ACTIVE' | 'SUSPENDED';
+type RequestFilter = 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED';
+type ToastState = { message: string; type: 'error' | 'success' } | null;
+
+/* ------------------------ Helpers ------------------------ */
+
+const formatDate = (iso: string, withTime = false) =>
+  new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+  });
+
+const daysSince = (iso: string) =>
+  Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+
+const waitingLabel = (iso: string) => {
+  const d = daysSince(iso);
+  if (d === 0) return 'Submitted today';
+  if (d === 1) return 'Waiting 1 day';
+  return `Waiting ${d} days`;
+};
+
+const getErrorMessage = (err: unknown, fallback: string) => {
+  const e = err as { response?: { data?: { message?: string } } };
+  return e?.response?.data?.message || fallback;
+};
+
+const avatarPalette = [
+  'bg-blue-100 text-blue-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-violet-100 text-violet-700',
+  'bg-amber-100 text-amber-800',
+  'bg-rose-100 text-rose-700',
+  'bg-cyan-100 text-cyan-700',
+];
+
+const avatarTone = (name = '') => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return avatarPalette[hash % avatarPalette.length];
+};
+
+/* ------------------------ UI primitives ------------------------ */
+
+function Avatar({ name, muted = false }: { name?: string; muted?: boolean }) {
+  return (
+    <div
+      className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
+        muted ? 'bg-slate-200 text-slate-500' : avatarTone(name)
+      }`}
+    >
+      {name?.charAt(0)?.toUpperCase() || '?'}
+    </div>
+  );
+}
+
+function StatusPill({
+  tone,
+  icon,
+  children,
+}: {
+  tone: 'green' | 'amber' | 'red';
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const styles = {
+    green: 'bg-green-100 text-green-800',
+    amber: 'bg-amber-100 text-amber-900',
+    red: 'bg-red-100 text-red-800',
+  } as const;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${styles[tone]}`}>
+      {icon}
+      {children}
+    </span>
+  );
+}
+
+function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      title={label}
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+        checked ? 'bg-green-500' : 'bg-slate-300'
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-[22px]' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+  icon,
+  chip,
+  valueClass = 'text-slate-900',
+}: {
+  label: string;
+  value: number;
+  hint: string;
+  icon: React.ReactNode;
+  chip: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${chip}`}>{icon}</div>
+      <div className="min-w-0">
+        <div className="text-xs font-medium text-slate-500">{label}</div>
+        <div className={`text-2xl font-bold tabular-nums leading-tight ${valueClass}`}>{value}</div>
+        <div className="truncate text-xs text-slate-400">{hint}</div>
+      </div>
+    </div>
+  );
+}
+
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: Array<{ key: T; label: string; count: number }>;
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="inline-flex self-start rounded-xl bg-slate-200/70 p-1 sm:self-auto">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+            value === o.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          {o.label}
+          <span
+            className={`rounded-full px-1.5 text-[11px] tabular-nums ${
+              value === o.key ? 'bg-slate-100 text-slate-700' : 'bg-slate-300/50 text-slate-600'
+            }`}
+          >
+            {o.count}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  subtitle,
+  icon,
+  iconClass,
+  onClose,
+  children,
+  footer,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: React.ReactNode;
+  iconClass: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  footer: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 px-6 pt-6">
+          <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${iconClass}`}>
+            {icon}
+          </div>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+            {subtitle && <p className="truncate text-sm text-slate-500">{subtitle}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-6 py-5 text-sm leading-relaxed text-slate-600">{children}</div>
+        <div className="flex justify-end gap-2 rounded-b-2xl bg-slate-50 px-6 py-4">{footer}</div>
+      </div>
+    </div>
+  );
+}
+
+const btnBase =
+  'inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2';
+const btnSecondary = `${btnBase} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-400`;
+const btnDanger = `${btnBase} bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500`;
+const btnSuccess = `${btnBase} bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-500`;
+
+/* ------------------------------ Page ------------------------------ */
+
 export default function PlatformAdminDashboardPage() {
   const router = useRouter();
   const [adminUser, setAdminUser] = useState<PlatformAdminUser | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('ORGANIZATIONS');
   const [companies, setCompanies] = useState<CompanyItem[]>([]);
+  const [onboardingRequests, setOnboardingRequests] = useState<OnboardingRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [companyFilter, setCompanyFilter] = useState<CompanyFilter>('ALL');
+  const [onboardingFilter, setOnboardingFilter] = useState<RequestFilter>('ALL');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [confirmToggle, setConfirmToggle] = useState<{ company: CompanyItem; activate: boolean } | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+
+  // Onboarding approval / rejection modals
+  const [confirmApproveModal, setConfirmApproveModal] = useState<OnboardingRequestItem | null>(null);
+  const [rejectModal, setRejectModal] = useState<OnboardingRequestItem | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+
+  const showToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
+    setToast({ message, type });
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const loadData = useCallback(async () => {
     try {
@@ -66,9 +347,14 @@ export default function PlatformAdminDashboardPage() {
       const meRes = await api.get('/platform-admin/me');
       setAdminUser(meRes.data);
 
-      // 2. Fetch all onboarded companies
-      const companiesRes = await api.get('/platform-admin/companies');
+      // 2. Fetch all onboarded companies and onboarding requests in parallel
+      const [companiesRes, requestsRes] = await Promise.all([
+        api.get('/platform-admin/companies'),
+        api.get('/platform-admin/onboarding-requests').catch(() => ({ data: [] })),
+      ]);
+
       setCompanies(companiesRes.data || []);
+      setOnboardingRequests(requestsRes.data || []);
     } catch (err: unknown) {
       console.error('Failed to load platform data:', err);
       // Not authenticated or invalid token
@@ -81,7 +367,6 @@ export default function PlatformAdminDashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    // Check initial token
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (!token) {
       router.replace('/platform-admin/login');
@@ -97,431 +382,876 @@ export default function PlatformAdminDashboardPage() {
     router.replace('/platform-admin/login');
   };
 
+  const switchTab = (tab: Tab) => {
+    setActiveTab(tab);
+    setSearchQuery('');
+  };
+
   const copyToClipboard = (id: string) => {
     navigator.clipboard.writeText(id);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Toggle company active/suspended status
   const handleToggleStatus = async (company: CompanyItem, activate: boolean) => {
     setConfirmToggle(null);
     setTogglingId(company.id);
     try {
       await api.patch(`/platform-admin/companies/${company.id}/status`, { activate });
-      // Update local state optimistically
       setCompanies((prev) =>
         prev.map((c) => (c.id === company.id ? { ...c, isActive: activate } : c))
       );
+      showToast(`${company.name} ${activate ? 'activated' : 'suspended'}.`, 'success');
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      alert(e?.response?.data?.message || 'Failed to update organization status.');
+      showToast(getErrorMessage(err, 'Failed to update organization status.'));
     } finally {
       setTogglingId(null);
     }
   };
 
-  // Filtered companies based on search
-  const filteredCompanies = useMemo(() => {
-    if (!searchQuery.trim()) return companies;
-    const q = searchQuery.toLowerCase().trim();
-    return companies.filter((c) => {
-      const nameMatch = c.name?.toLowerCase().includes(q);
-      const idMatch = c.id?.toLowerCase().includes(q);
-      const ownerEmailMatch = c.employees?.[0]?.email?.toLowerCase().includes(q);
-      const ownerNameMatch = c.employees?.[0]?.name?.toLowerCase().includes(q);
-      return nameMatch || idMatch || ownerEmailMatch || ownerNameMatch;
-    });
-  }, [companies, searchQuery]);
+  // Approve onboarding request
+  const handleApproveRequest = async (request: OnboardingRequestItem) => {
+    setConfirmApproveModal(null);
+    setProcessingRequestId(request.id);
+    try {
+      await api.post(`/platform-admin/onboarding-requests/${request.id}/approve`);
+      await loadData();
+      showToast(`${request.companyName} approved and onboarded.`, 'success');
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, 'Failed to approve onboarding request.'));
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
 
-  // Aggregate Metrics
-  const totalEmployeesAcrossPlatform = useMemo(() => {
-    return companies.reduce((acc, curr) => acc + (curr._count?.employees || 0), 0);
-  }, [companies]);
+  // Reject onboarding request
+  const handleRejectRequest = async (request: OnboardingRequestItem) => {
+    setRejectModal(null);
+    setProcessingRequestId(request.id);
+    const reason = rejectionReason.trim();
+    setRejectionReason('');
+    try {
+      await api.post(`/platform-admin/onboarding-requests/${request.id}/reject`, { reason });
+      await loadData();
+      showToast(`${request.companyName} request rejected.`, 'success');
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, 'Failed to reject onboarding request.'));
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
 
+  const closeRejectModal = useCallback(() => {
+    setRejectModal(null);
+    setRejectionReason('');
+  }, []);
+  const closeApproveModal = useCallback(() => setConfirmApproveModal(null), []);
+  const closeToggleModal = useCallback(() => setConfirmToggle(null), []);
+
+  // Metrics
+  const totalEmployeesAcrossPlatform = useMemo(
+    () => companies.reduce((acc, curr) => acc + (curr._count?.employees || 0), 0),
+    [companies]
+  );
   const activeCount = useMemo(() => companies.filter((c) => c.isActive).length, [companies]);
   const suspendedCount = useMemo(() => companies.filter((c) => !c.isActive).length, [companies]);
 
+  const pendingRequestsCount = useMemo(
+    () => onboardingRequests.filter((r) => r.status === 'PENDING').length,
+    [onboardingRequests]
+  );
+  const approvedRequestsCount = useMemo(
+    () => onboardingRequests.filter((r) => r.status === 'APPROVED').length,
+    [onboardingRequests]
+  );
+  const rejectedRequestsCount = useMemo(
+    () => onboardingRequests.filter((r) => r.status === 'REJECTED').length,
+    [onboardingRequests]
+  );
+
+  // Filtered companies based on status filter and search
+  const filteredCompanies = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return companies.filter((c) => {
+      if (companyFilter === 'ACTIVE' && !c.isActive) return false;
+      if (companyFilter === 'SUSPENDED' && c.isActive) return false;
+      if (!q) return true;
+      return (
+        c.name?.toLowerCase().includes(q) ||
+        c.id?.toLowerCase().includes(q) ||
+        c.employees?.[0]?.email?.toLowerCase().includes(q) ||
+        c.employees?.[0]?.name?.toLowerCase().includes(q)
+      );
+    });
+  }, [companies, companyFilter, searchQuery]);
+
+  // Filtered onboarding requests based on status and search
+  const filteredRequests = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return onboardingRequests.filter((r) => {
+      if (onboardingFilter !== 'ALL' && r.status !== onboardingFilter) return false;
+      if (!q) return true;
+      return (
+        r.companyName?.toLowerCase().includes(q) ||
+        r.adminName?.toLowerCase().includes(q) ||
+        r.adminEmail?.toLowerCase().includes(q)
+      );
+    });
+  }, [onboardingRequests, onboardingFilter, searchQuery]);
+
+  const navItems: Array<{ key: Tab; label: string; icon: React.ReactNode; badge?: number }> = [
+    { key: 'ORGANIZATIONS', label: 'Organizations', icon: <Building2 size={18} /> },
+    { key: 'ONBOARDING', label: 'Onboarding requests', icon: <UserCheck size={18} />, badge: pendingRequestsCount },
+  ];
+
+  const thClass = 'px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500';
+  const hasActiveFilter =
+    searchQuery.trim() !== '' ||
+    (activeTab === 'ORGANIZATIONS' ? companyFilter !== 'ALL' : onboardingFilter !== 'ALL');
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setCompanyFilter('ALL');
+    setOnboardingFilter('ALL');
+  };
+
   return (
-    <div className="min-h-screen bg-[#070d24] text-slate-100 flex flex-col font-sans">
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-[#0c1840]/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-8 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 shadow-md shadow-blue-500/25 border border-white/20">
-            <ShieldCheck size={22} className="text-white" />
+    <div className="flex min-h-screen bg-slate-100 text-slate-900">
+      {/* ============ Sidebar (desktop) ============ */}
+      <aside className="sticky top-0 hidden h-screen w-64 flex-shrink-0 flex-col bg-[#14213d] md:flex">
+        <div className="flex items-center gap-3 px-6 py-6">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500 text-white">
+            <ShieldCheck size={20} />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-lg tracking-tight text-white">TapIn</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full">
-                Platform Admin
-              </span>
-            </div>
-            <p className="text-[11px] text-blue-200/60 font-medium">Cross-Organization Management</p>
+          <div className="leading-tight">
+            <div className="text-base font-bold text-white">TapIn</div>
+            <div className="text-xs text-slate-400">Platform admin</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <nav className="flex-1 space-y-1 px-3 py-2">
+          <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            Manage
+          </div>
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => switchTab(item.key)}
+              className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition cursor-pointer ${
+                activeTab === item.key
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              {activeTab === item.key && (
+                <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-blue-400" />
+              )}
+              {item.icon}
+              <span className="flex-1 text-left">{item.label}</span>
+              {!!item.badge && item.badge > 0 && (
+                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-slate-900">
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="border-t border-white/10 p-4">
           {adminUser && (
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-blue-200 font-medium">{adminUser.email}</span>
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-sm font-bold text-blue-200">
+                {(adminUser.name || adminUser.email).charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-white">{adminUser.name || 'Platform admin'}</div>
+                <div className="truncate text-xs text-slate-400">{adminUser.email}</div>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white cursor-pointer"
+          >
+            <LogOut size={15} />
+            Sign out
+          </button>
+        </div>
+      </aside>
+
+      {/* ============ Main column ============ */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile header */}
+        <header className="sticky top-0 z-30 bg-[#14213d] md:hidden">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500 text-white">
+                <ShieldCheck size={17} />
+              </div>
+              <span className="text-sm font-bold text-white">TapIn Platform</span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg p-2 text-slate-300 hover:bg-white/10 cursor-pointer"
+              aria-label="Sign out"
+            >
+              <LogOut size={17} />
+            </button>
+          </div>
+          <div className="flex gap-1 px-3 pb-3">
+            {navItems.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => switchTab(item.key)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer ${
+                  activeTab === item.key ? 'bg-white/10 text-white' : 'text-slate-400'
+                }`}
+              >
+                {item.label}
+                {!!item.badge && item.badge > 0 && (
+                  <span className="rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-slate-900">
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        <main className="mx-auto w-full max-w-6xl flex-1 space-y-5 px-4 py-6 sm:px-8 sm:py-8">
+          {/* Page heading */}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                {activeTab === 'ORGANIZATIONS' ? 'Organizations' : 'Onboarding requests'}
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                {activeTab === 'ORGANIZATIONS'
+                  ? 'Manage registered workspaces and control who can sign in.'
+                  : 'Review applications from organizations requesting access.'}
+              </p>
+            </div>
+            <button
+              onClick={loadData}
+              disabled={loading}
+              className={`${btnSecondary} disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
+
+          {/* Attention banner */}
+          {activeTab === 'ORGANIZATIONS' && pendingRequestsCount > 0 && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-amber-950">
+                    {pendingRequestsCount} onboarding {pendingRequestsCount === 1 ? 'request is' : 'requests are'} waiting for review
+                  </div>
+                  <div className="text-xs text-amber-800/80">
+                    New organizations can&apos;t sign in until you approve them.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  switchTab('ONBOARDING');
+                  setOnboardingFilter('PENDING');
+                }}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-amber-950 transition hover:bg-amber-400 cursor-pointer"
+              >
+                Review now
+                <ArrowRight size={15} />
+              </button>
             </div>
           )}
 
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white transition cursor-pointer"
-            title="Refresh organizations list"
-          >
-            <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
-          </button>
+          {/* Stat cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {activeTab === 'ORGANIZATIONS' ? (
+              <>
+                <StatCard
+                  label="Organizations"
+                  value={companies.length}
+                  hint="Registered tenants"
+                  icon={<Building2 size={22} />}
+                  chip="bg-blue-100 text-blue-600"
+                />
+                <StatCard
+                  label="Employees"
+                  value={totalEmployeesAcrossPlatform}
+                  hint="Across all organizations"
+                  icon={<Users size={22} />}
+                  chip="bg-violet-100 text-violet-600"
+                />
+                <StatCard
+                  label="Active"
+                  value={activeCount}
+                  hint="Can sign in"
+                  icon={<ShieldCheck size={22} />}
+                  chip="bg-green-100 text-green-600"
+                  valueClass="text-green-700"
+                />
+                <StatCard
+                  label="Suspended"
+                  value={suspendedCount}
+                  hint="Access revoked"
+                  icon={<ShieldOff size={22} />}
+                  chip="bg-red-100 text-red-600"
+                  valueClass={suspendedCount > 0 ? 'text-red-700' : 'text-slate-400'}
+                />
+              </>
+            ) : (
+              <>
+                <StatCard
+                  label="Total applications"
+                  value={onboardingRequests.length}
+                  hint="All time"
+                  icon={<FileText size={22} />}
+                  chip="bg-blue-100 text-blue-600"
+                />
+                <StatCard
+                  label="Pending"
+                  value={pendingRequestsCount}
+                  hint="Needs your review"
+                  icon={<Clock size={22} />}
+                  chip="bg-amber-100 text-amber-700"
+                  valueClass={pendingRequestsCount > 0 ? 'text-amber-700' : 'text-slate-400'}
+                />
+                <StatCard
+                  label="Approved"
+                  value={approvedRequestsCount}
+                  hint="Workspaces created"
+                  icon={<CheckCircle size={22} />}
+                  chip="bg-green-100 text-green-600"
+                  valueClass="text-green-700"
+                />
+                <StatCard
+                  label="Rejected"
+                  value={rejectedRequestsCount}
+                  hint="Declined"
+                  icon={<XCircle size={22} />}
+                  chip="bg-red-100 text-red-600"
+                  valueClass={rejectedRequestsCount > 0 ? 'text-red-700' : 'text-slate-400'}
+                />
+              </>
+            )}
+          </div>
 
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-300 hover:text-red-200 text-xs font-semibold transition cursor-pointer"
-          >
-            <LogOut size={14} />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Confirm Deactivation Modal */}
-      {confirmToggle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#0c1840] border border-white/15 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${confirmToggle.activate ? 'bg-emerald-500/20 border border-emerald-400/30' : 'bg-rose-500/20 border border-rose-400/30'}`}>
-                {confirmToggle.activate
-                  ? <Power size={20} className="text-emerald-400" />
-                  : <PowerOff size={20} className="text-rose-400" />
+          {/* Toolbar */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-sm">
+              <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={
+                  activeTab === 'ORGANIZATIONS'
+                    ? 'Search by name, owner, or ID'
+                    : 'Search by company, applicant, or email'
                 }
-              </div>
-              <div>
-                <h2 className="font-black text-white text-base">
-                  {confirmToggle.activate ? 'Activate Organization' : 'Suspend Organization'}
-                </h2>
-                <p className="text-xs text-blue-200/60 font-medium">{confirmToggle.company.name}</p>
-              </div>
+                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-9 text-sm text-slate-900 shadow-sm placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  aria-label="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
 
-            {!confirmToggle.activate && (
-              <div className="flex items-start gap-2 bg-rose-500/10 border border-rose-400/20 rounded-xl px-4 py-3 mb-4">
-                <AlertTriangle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-rose-300 leading-relaxed">
-                  <strong className="font-bold">All employees and admins</strong> of this organization — including the Super Admin — will be immediately blocked from logging in. Existing sessions may remain active until they expire.
-                </p>
-              </div>
+            {activeTab === 'ORGANIZATIONS' ? (
+              <Segmented<CompanyFilter>
+                value={companyFilter}
+                onChange={setCompanyFilter}
+                options={[
+                  { key: 'ALL', label: 'All', count: companies.length },
+                  { key: 'ACTIVE', label: 'Active', count: activeCount },
+                  { key: 'SUSPENDED', label: 'Suspended', count: suspendedCount },
+                ]}
+              />
+            ) : (
+              <Segmented<RequestFilter>
+                value={onboardingFilter}
+                onChange={setOnboardingFilter}
+                options={[
+                  { key: 'ALL', label: 'All', count: onboardingRequests.length },
+                  { key: 'PENDING', label: 'Pending', count: pendingRequestsCount },
+                  { key: 'APPROVED', label: 'Approved', count: approvedRequestsCount },
+                  { key: 'REJECTED', label: 'Rejected', count: rejectedRequestsCount },
+                ]}
+              />
             )}
+          </div>
 
-            {confirmToggle.activate && (
-              <div className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-400/20 rounded-xl px-4 py-3 mb-4">
-                <Power size={15} className="text-emerald-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-emerald-300 leading-relaxed">
-                  All employees and admins of this organization will regain access immediately.
-                </p>
-              </div>
-            )}
+          {/* ================= ORGANIZATIONS TABLE ================= */}
+          {activeTab === 'ORGANIZATIONS' && (
+            <>
+              {loading && companies.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-20 shadow-sm">
+                  <Loader2 size={26} className="animate-spin text-blue-500" />
+                  <p className="mt-3 text-sm text-slate-500">Loading organizations…</p>
+                </div>
+              ) : filteredCompanies.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                    <Inbox size={26} />
+                  </div>
+                  <h3 className="mt-4 text-sm font-semibold text-slate-900">No organizations found</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {hasActiveFilter ? 'Nothing matches your search or filter.' : 'No organizations registered yet.'}
+                  </p>
+                  {hasActiveFilter && (
+                    <button
+                      onClick={clearFilters}
+                      className="mt-3 text-sm font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+                    <h2 className="text-sm font-semibold text-slate-900">Registered organizations</h2>
+                    <span className="text-xs text-slate-500">
+                      Showing {filteredCompanies.length} of {companies.length}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-slate-200 bg-slate-50">
+                        <tr>
+                          <th className={thClass}>Organization</th>
+                          <th className={thClass}>Owner</th>
+                          <th className={thClass}>Size</th>
+                          <th className={thClass}>Timezone</th>
+                          <th className={thClass}>Registered</th>
+                          <th className={thClass}>Access</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredCompanies.map((company) => {
+                          const owner = company.employees?.[0];
+                          const isToggling = togglingId === company.id;
 
-            <p className="text-sm text-slate-300 mb-6">
-              Are you sure you want to <strong className="text-white">{confirmToggle.activate ? 'activate' : 'suspend'}</strong> <strong className="text-white">&ldquo;{confirmToggle.company.name}&rdquo;</strong>?
-            </p>
+                          return (
+                            <tr
+                              key={company.id}
+                              className={`transition ${
+                                company.isActive ? 'hover:bg-slate-50' : 'bg-red-50/50 hover:bg-red-50'
+                              }`}
+                            >
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                  <Avatar name={company.name} muted={!company.isActive} />
+                                  <div className="min-w-0">
+                                    <div
+                                      className={`font-semibold ${
+                                        company.isActive ? 'text-slate-900' : 'text-slate-500'
+                                      }`}
+                                    >
+                                      {company.name}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => copyToClipboard(company.id)}
+                                      className="mt-0.5 inline-flex items-center gap-1 font-mono text-xs text-slate-400 transition hover:text-slate-700 cursor-pointer"
+                                      title="Copy company ID"
+                                    >
+                                      {company.id.slice(0, 8)}…
+                                      {copiedId === company.id ? (
+                                        <Check size={11} className="text-green-600" />
+                                      ) : (
+                                        <Copy size={11} />
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
 
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmToggle(null)}
-                className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 transition cursor-pointer"
-              >
+                              <td className="px-5 py-4">
+                                {owner ? (
+                                  <div>
+                                    <div className="font-medium text-slate-800">{owner.name}</div>
+                                    <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                                      <Mail size={11} />
+                                      {owner.email}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs italic text-slate-400">No admin assigned</span>
+                                )}
+                              </td>
+
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-1.5 text-slate-700">
+                                  <Users size={14} className="text-slate-400" />
+                                  <span className="font-semibold tabular-nums">{company._count.employees}</span>
+                                  <span className="text-xs text-slate-500">employees</span>
+                                </div>
+                                <div className="mt-0.5 flex items-center gap-1.5 text-slate-700">
+                                  <Layers size={14} className="text-slate-400" />
+                                  <span className="font-semibold tabular-nums">{company._count.departments}</span>
+                                  <span className="text-xs text-slate-500">departments</span>
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4 text-slate-600">
+                                <div className="flex items-center gap-1.5">
+                                  <Globe size={14} className="text-slate-400" />
+                                  {company.timezone || 'Asia/Karachi'}
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4 text-slate-600">{formatDate(company.createdAt)}</td>
+
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                  {isToggling ? (
+                                    <Loader2 size={20} className="animate-spin text-slate-400" />
+                                  ) : (
+                                    <Switch
+                                      checked={company.isActive}
+                                      label={company.isActive ? `Suspend ${company.name}` : `Activate ${company.name}`}
+                                      onChange={() =>
+                                        setConfirmToggle({ company, activate: !company.isActive })
+                                      }
+                                    />
+                                  )}
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
+                                      company.isActive ? 'text-green-700' : 'text-red-700'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`h-2 w-2 rounded-full ${
+                                        company.isActive ? 'bg-green-500' : 'bg-red-500'
+                                      }`}
+                                    />
+                                    {company.isActive ? 'Active' : 'Suspended'}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ================= ONBOARDING TABLE ================= */}
+          {activeTab === 'ONBOARDING' && (
+            <>
+              {loading && onboardingRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-20 shadow-sm">
+                  <Loader2 size={26} className="animate-spin text-blue-500" />
+                  <p className="mt-3 text-sm text-slate-500">Loading applications…</p>
+                </div>
+              ) : filteredRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                    <Inbox size={26} />
+                  </div>
+                  <h3 className="mt-4 text-sm font-semibold text-slate-900">No requests found</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {hasActiveFilter ? 'No requests match your filters.' : 'No onboarding requests at this time.'}
+                  </p>
+                  {hasActiveFilter && (
+                    <button
+                      onClick={clearFilters}
+                      className="mt-3 text-sm font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+                    <h2 className="text-sm font-semibold text-slate-900">Applications</h2>
+                    <span className="text-xs text-slate-500">
+                      Showing {filteredRequests.length} of {onboardingRequests.length}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-slate-200 bg-slate-50">
+                        <tr>
+                          <th className={thClass}>Organization</th>
+                          <th className={thClass}>Applicant</th>
+                          <th className={thClass}>Timezone</th>
+                          <th className={thClass}>Submitted</th>
+                          <th className={thClass}>Status</th>
+                          <th className={`${thClass} text-right`}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredRequests.map((req) => {
+                          const isProcessing = processingRequestId === req.id;
+
+                          return (
+                            <tr
+                              key={req.id}
+                              className={`transition ${
+                                req.status === 'PENDING' ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                  <Avatar name={req.companyName} />
+                                  <div className="min-w-0">
+                                    <div className="font-semibold text-slate-900">{req.companyName}</div>
+                                    <div className="mt-0.5 font-mono text-xs text-slate-400">
+                                      {req.id.slice(0, 8)}…
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4">
+                                <div className="font-medium text-slate-800">{req.adminName}</div>
+                                <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                                  <Mail size={11} />
+                                  {req.adminEmail}
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4 text-slate-600">
+                                <div className="flex items-center gap-1.5">
+                                  <Globe size={14} className="text-slate-400" />
+                                  {req.timezone}
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4 text-slate-600">{formatDate(req.createdAt, true)}</td>
+
+                              <td className="px-5 py-4">
+                                {req.status === 'PENDING' && (
+                                  <div>
+                                    <StatusPill tone="amber" icon={<Clock size={12} />}>
+                                      Pending review
+                                    </StatusPill>
+                                    <div className="mt-1 text-xs text-amber-800/80">{waitingLabel(req.createdAt)}</div>
+                                  </div>
+                                )}
+                                {req.status === 'APPROVED' && (
+                                  <div>
+                                    <StatusPill tone="green" icon={<CheckCircle size={12} />}>
+                                      Approved
+                                    </StatusPill>
+                                    <div className="mt-1 text-xs text-slate-500">
+                                      {req.reviewedAt ? formatDate(req.reviewedAt) : ''}
+                                      {req.reviewedBy ? ` · ${req.reviewedBy}` : ''}
+                                    </div>
+                                  </div>
+                                )}
+                                {req.status === 'REJECTED' && (
+                                  <div>
+                                    <StatusPill tone="red" icon={<XCircle size={12} />}>
+                                      Rejected
+                                    </StatusPill>
+                                    <div className="mt-1 max-w-[220px] truncate text-xs text-slate-500" title={req.rejectionReason || undefined}>
+                                      {req.rejectionReason
+                                        ? req.rejectionReason
+                                        : `${req.reviewedAt ? formatDate(req.reviewedAt) : ''}${
+                                            req.reviewedBy ? ` · ${req.reviewedBy}` : ''
+                                          }`}
+                                    </div>
+                                  </div>
+                                )}
+                              </td>
+
+                              <td className="px-5 py-4 text-right">
+                                {isProcessing ? (
+                                  <Loader2 size={18} className="ml-auto animate-spin text-slate-400" />
+                                ) : req.status === 'PENDING' ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setRejectModal(req)}
+                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                                    >
+                                      Reject
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmApproveModal(req)}
+                                      className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-green-700 cursor-pointer"
+                                    >
+                                      <Check size={13} />
+                                      Approve
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400">No action needed</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </main>
+      </div>
+
+      {/* ============ Modals ============ */}
+
+      {confirmToggle && (
+        <Modal
+          title={confirmToggle.activate ? 'Activate organization' : 'Suspend organization'}
+          subtitle={confirmToggle.company.name}
+          icon={confirmToggle.activate ? <ShieldCheck size={22} /> : <ShieldOff size={22} />}
+          iconClass={confirmToggle.activate ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}
+          onClose={closeToggleModal}
+          footer={
+            <>
+              <button type="button" onClick={closeToggleModal} className={btnSecondary}>
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => handleToggleStatus(confirmToggle.company, confirmToggle.activate)}
-                className={`px-5 py-2 rounded-xl text-sm font-bold text-white transition cursor-pointer ${
-                  confirmToggle.activate
-                    ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-900/40'
-                    : 'bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-900/40'
-                }`}
+                className={confirmToggle.activate ? btnSuccess : btnDanger}
               >
-                {confirmToggle.activate ? 'Yes, Activate' : 'Yes, Suspend'}
+                {confirmToggle.activate ? 'Activate' : 'Suspend'}
               </button>
+            </>
+          }
+        >
+          {confirmToggle.activate ? (
+            <p>
+              All employees and admins of <strong className="text-slate-900">{confirmToggle.company.name}</strong>{' '}
+              will regain access immediately.
+            </p>
+          ) : (
+            <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3 text-red-800">
+              <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+              <p>
+                All employees and admins of <strong>{confirmToggle.company.name}</strong> will be blocked from
+                signing in immediately. Access stays blocked until you reactivate the organization.
+              </p>
             </div>
+          )}
+        </Modal>
+      )}
+
+      {confirmApproveModal && (
+        <Modal
+          title="Approve application"
+          subtitle={confirmApproveModal.companyName}
+          icon={<CheckCircle size={22} />}
+          iconClass="bg-green-100 text-green-600"
+          onClose={closeApproveModal}
+          footer={
+            <>
+              <button type="button" onClick={closeApproveModal} className={btnSecondary}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApproveRequest(confirmApproveModal)}
+                className={btnSuccess}
+              >
+                Approve &amp; onboard
+              </button>
+            </>
+          }
+        >
+          <dl className="mb-4 divide-y divide-slate-100 rounded-xl border border-slate-200 text-sm">
+            {[
+              ['Company', confirmApproveModal.companyName],
+              ['Super admin', confirmApproveModal.adminName],
+              ['Email', confirmApproveModal.adminEmail],
+              ['Timezone', confirmApproveModal.timezone],
+            ].map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-4 px-3.5 py-2.5">
+                <dt className="text-slate-500">{label}</dt>
+                <dd className="truncate font-medium text-slate-900">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p>
+            This creates the company record, provisions the Super Admin account, and sends an activation email to{' '}
+            <strong className="text-slate-900">{confirmApproveModal.adminEmail}</strong>.
+          </p>
+        </Modal>
+      )}
+
+      {rejectModal && (
+        <Modal
+          title="Reject application"
+          subtitle={rejectModal.companyName}
+          icon={<XCircle size={22} />}
+          iconClass="bg-red-100 text-red-600"
+          onClose={closeRejectModal}
+          footer={
+            <>
+              <button type="button" onClick={closeRejectModal} className={btnSecondary}>
+                Cancel
+              </button>
+              <button type="button" onClick={() => handleRejectRequest(rejectModal)} className={btnDanger}>
+                Reject request
+              </button>
+            </>
+          }
+        >
+          <p className="mb-4">
+            The organization for <strong className="text-slate-900">{rejectModal.companyName}</strong> (
+            {rejectModal.adminEmail}) will not be created.
+          </p>
+          <label htmlFor="rejection-reason" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            Reason <span className="font-normal text-slate-400">(optional)</span>
+          </label>
+          <textarea
+            id="rejection-reason"
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            placeholder="e.g. Unverified organization or duplicate registration"
+            rows={3}
+            className="w-full rounded-xl border border-slate-300 p-3 text-sm text-slate-900 placeholder-slate-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+          />
+        </Modal>
+      )}
+
+      {/* ============ Toast ============ */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-[60] max-w-sm" role="status">
+          <div className="flex items-start gap-2.5 rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl">
+            {toast.type === 'success' ? (
+              <CheckCircle size={17} className="mt-0.5 flex-shrink-0 text-green-400" />
+            ) : (
+              <AlertTriangle size={17} className="mt-0.5 flex-shrink-0 text-red-400" />
+            )}
+            <span className="flex-1">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="text-slate-400 hover:text-white cursor-pointer"
+              aria-label="Dismiss"
+            >
+              <X size={14} />
+            </button>
           </div>
         </div>
       )}
-
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-8 space-y-8">
-        {/* Banner with Metrics */}
-        <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Registered Organizations
-              </h1>
-              <p className="text-xs sm:text-sm text-blue-200/70 mt-1">
-                Overview and live directory of all client companies onboarded on the platform.
-              </p>
-            </div>
-          </div>
-
-          {/* Metric Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-xs flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-200/60 block">
-                  Total Organizations
-                </span>
-                <span className="text-3xl font-black text-white mt-1 block">
-                  {companies.length}
-                </span>
-                <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 mt-1">
-                  <TrendingUp size={12} /> Live tenants
-                </span>
-              </div>
-              <div className="h-12 w-12 rounded-2xl bg-blue-500/15 border border-blue-400/20 flex items-center justify-center text-blue-400">
-                <Building2 size={24} />
-              </div>
-            </div>
-
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-xs flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-200/60 block">
-                  Total Employees
-                </span>
-                <span className="text-3xl font-black text-white mt-1 block">
-                  {totalEmployeesAcrossPlatform}
-                </span>
-                <span className="text-[11px] text-blue-300 font-medium mt-1 block">
-                  Across all organizations
-                </span>
-              </div>
-              <div className="h-12 w-12 rounded-2xl bg-indigo-500/15 border border-indigo-400/20 flex items-center justify-center text-indigo-400">
-                <Users size={24} />
-              </div>
-            </div>
-
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-xs flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-200/60 block">
-                  Active
-                </span>
-                <span className="text-3xl font-black text-emerald-400 mt-1 block">
-                  {activeCount}
-                </span>
-                <span className="text-[11px] text-emerald-300/70 font-medium mt-1 block">
-                  Organizations online
-                </span>
-              </div>
-              <div className="h-12 w-12 rounded-2xl bg-emerald-500/15 border border-emerald-400/20 flex items-center justify-center text-emerald-400">
-                <Power size={24} />
-              </div>
-            </div>
-
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-xs flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-200/60 block">
-                  Suspended
-                </span>
-                <span className={`text-3xl font-black mt-1 block ${suspendedCount > 0 ? 'text-rose-400' : 'text-slate-500'}`}>
-                  {suspendedCount}
-                </span>
-                <span className="text-[11px] text-rose-300/70 font-medium mt-1 block">
-                  Access revoked
-                </span>
-              </div>
-              <div className="h-12 w-12 rounded-2xl bg-purple-500/15 border border-purple-400/20 flex items-center justify-center text-purple-400">
-                <Layers size={24} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Search & Actions Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-              <Search size={16} />
-            </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by company name, owner, or ID..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-            />
-          </div>
-
-          <div className="text-xs text-blue-200/60 font-medium">
-            Showing <strong className="text-white">{filteredCompanies.length}</strong> of{' '}
-            <strong className="text-white">{companies.length}</strong> companies
-          </div>
-        </div>
-
-        {/* Companies Table / Cards */}
-        {loading && companies.length === 0 ? (
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-16 flex flex-col items-center justify-center">
-            <RefreshCw size={32} className="animate-spin text-blue-400 mb-3" />
-            <p className="text-sm font-semibold text-slate-300">Loading organizations...</p>
-          </div>
-        ) : filteredCompanies.length === 0 ? (
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-16 text-center">
-            <Building2 size={40} className="mx-auto text-slate-500 mb-3" />
-            <h3 className="text-base font-bold text-white">No organizations found</h3>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              {searchQuery ? 'Try adjusting your search keywords.' : 'No organizations have registered yet.'}
-            </p>
-          </div>
-        ) : (
-          <div className="bg-white/5 border border-white/10 rounded-3xl overflow-hidden shadow-xl">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="text-[11px] uppercase tracking-wider text-blue-200/60 bg-white/5 border-b border-white/10">
-                  <tr>
-                    <th className="px-6 py-4 font-bold">Organization</th>
-                    <th className="px-6 py-4 font-bold">Primary Owner</th>
-                    <th className="px-6 py-4 font-bold">Scale</th>
-                    <th className="px-6 py-4 font-bold">Timezone</th>
-                    <th className="px-6 py-4 font-bold">Registered On</th>
-                    <th className="px-6 py-4 font-bold text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {filteredCompanies.map((company) => {
-                    const owner = company.employees?.[0];
-                    const isToggling = togglingId === company.id;
-                    const createdDate = new Date(company.createdAt).toLocaleDateString(undefined, {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    });
-
-                    return (
-                      <tr
-                        key={company.id}
-                        className={`hover:bg-white/5 transition duration-150 ${!company.isActive ? 'opacity-60' : ''}`}
-                      >
-                        {/* Company Details */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`h-10 w-10 flex-shrink-0 rounded-xl flex items-center justify-center font-black text-sm ${company.isActive ? 'bg-blue-600/20 border border-blue-500/30 text-blue-400' : 'bg-slate-600/20 border border-slate-500/30 text-slate-500'}`}>
-                              {company.name?.charAt(0)?.toUpperCase() || 'C'}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-white text-[15px]">{company.name}</span>
-                                {!company.isActive && (
-                                  <span className="text-[9px] font-bold uppercase tracking-wider bg-rose-500/15 text-rose-400 border border-rose-400/20 px-1.5 py-0.5 rounded-full">
-                                    Suspended
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="font-mono text-[10px] text-slate-400">
-                                  ID: {company.id.slice(0, 12)}...
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => copyToClipboard(company.id)}
-                                  className="text-slate-400 hover:text-white transition p-0.5 rounded cursor-pointer"
-                                  title="Copy full Company ID"
-                                >
-                                  {copiedId === company.id ? (
-                                    <Check size={11} className="text-emerald-400" />
-                                  ) : (
-                                    <Copy size={11} />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Owner */}
-                        <td className="px-6 py-4">
-                          {owner ? (
-                            <div>
-                              <div className="font-semibold text-slate-200 text-xs sm:text-sm">
-                                {owner.name}
-                              </div>
-                              <div className="text-xs text-blue-300/80 flex items-center gap-1 mt-0.5">
-                                <Mail size={11} />
-                                <span>{owner.email}</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-500 italic">No admin assigned</span>
-                          )}
-                        </td>
-
-                        {/* Scale */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
-                              <Users size={12} />
-                              {company._count.employees} staff
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-lg">
-                              <Layers size={12} />
-                              {company._count.departments} depts
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Timezone */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium">
-                            <Globe size={13} className="text-slate-400" />
-                            <span>{company.timezone || 'Asia/Karachi'}</span>
-                          </div>
-                        </td>
-
-                        {/* Registered Date */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium">
-                            <Calendar size={13} className="text-slate-400" />
-                            <span>{createdDate}</span>
-                          </div>
-                        </td>
-
-                        {/* Status Toggle */}
-                        <td className="px-6 py-4 text-right">
-                          {isToggling ? (
-                            <Loader2 size={18} className="animate-spin text-slate-400 ml-auto" />
-                          ) : company.isActive ? (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmToggle({ company, activate: false })}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-rose-300 bg-rose-500/10 border border-rose-400/20 hover:bg-rose-500/20 hover:text-rose-200 transition cursor-pointer"
-                              title={`Suspend ${company.name}`}
-                            >
-                              <PowerOff size={12} />
-                              Suspend
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmToggle({ company, activate: true })}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-400/20 hover:bg-emerald-500/20 hover:text-emerald-200 transition cursor-pointer"
-                              title={`Activate ${company.name}`}
-                            >
-                              <Power size={12} />
-                              Activate
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </main>
     </div>
   );
 }
-

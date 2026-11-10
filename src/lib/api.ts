@@ -45,6 +45,20 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // Organization suspended: immediate eviction to login with explanation
+    if (error.response?.data?.code === 'COMPANY_SUSPENDED') {
+      if (typeof window !== 'undefined') {
+        useAuthStore.getState().logout();
+        const msg = encodeURIComponent(
+          error.response?.data?.message || 'Your organization has been deactivated.'
+        );
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.replace(`/login?error=${msg}`);
+        }
+      }
+      return Promise.reject(error);
+    }
     
     if (
       error.response?.status === 401 && 
