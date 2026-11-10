@@ -19,6 +19,8 @@ import {
   Wallet,
   ScrollText,
   ShieldAlert,
+  ArrowRight,
+  UserRound,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
@@ -143,6 +145,15 @@ export function getNavItems(role?: string | null): NavEntry[] {
 function isActivePath(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * HR admins and reporting managers also have their own attendance, leave, and
+ * correction records. They can switch to the employee portal without logging
+ * out; super admins do not participate in attendance and do not need it.
+ */
+function canUseEmployeePortal(role?: string | null) {
+  return role === 'ADMIN' || role === 'MANAGER';
 }
 
 /**
@@ -349,6 +360,36 @@ const Sidebar = ({
           />
         ))}
       </nav>
+
+      {/* Employee self-service switch for dual-role staff */}
+      {canUseEmployeePortal(user?.role) && !collapsed && (
+        <div className="px-4 pb-2">
+          <Link
+            href="/portal"
+            onClick={onNavClick}
+            className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-[#D6E0FF] transition hover:bg-white/15 hover:text-white"
+          >
+            <span className="flex items-center gap-2">
+              <UserRound size={16} />
+              Employee Portal
+            </span>
+            <ArrowRight size={15} />
+          </Link>
+        </div>
+      )}
+      {canUseEmployeePortal(user?.role) && collapsed && (
+        <div className="group relative flex justify-center px-3 pb-2">
+          <Link
+            href="/portal"
+            onClick={onNavClick}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-[#D6E0FF] transition hover:bg-white/15 hover:text-white"
+            aria-label="Switch to Employee Portal"
+          >
+            <UserRound size={18} />
+          </Link>
+          <RailTooltip label="Employee Portal" />
+        </div>
+      )}
 
       {/* Footer */}
       {onToggleCollapse && (

@@ -74,10 +74,14 @@ export default function DocumentVaultPage() {
   const [successMsg, setSuccessMsg] = useState('');
 
   const loadDocuments = useCallback(async () => {
+    if (!user?.id) return;
     try {
       setLoading(true);
       setErrorMsg('');
-      const res = await api.get('/documents');
+      // Always scope the employee portal to the signed-in employee. HR admins
+      // can read company-wide documents in the admin console, but the portal
+      // must not turn into a company document browser.
+      const res = await api.get('/documents', { params: { employeeId: user.id } });
       const docs = Array.isArray(res.data)
         ? res.data
         : Array.isArray(res.data?.data)
@@ -92,7 +96,7 @@ export default function DocumentVaultPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
