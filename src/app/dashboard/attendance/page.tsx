@@ -48,6 +48,7 @@ interface AttendanceLog {
   id: string;
   name: string;
   designation: string;
+  departmentId?: string | null;
   department?: string | null;
   status: string;
   checkin: string;
@@ -317,6 +318,11 @@ export default function AttendanceLogsPage() {
 
   const filteredLogs = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const selectedDepartmentName =
+      departmentFilter === 'ALL'
+        ? null
+        : departments.find((d) => d.id === departmentFilter)?.name ?? null;
+
     return logs.filter((log) => {
       const matchesSearch =
         !q ||
@@ -332,8 +338,8 @@ export default function AttendanceLogsPage() {
 
       const matchesDept =
         departmentFilter === 'ALL' ||
-        log.department === departmentFilter ||
-        departments.find((d) => d.id === departmentFilter)?.name === log.department;
+        log.departmentId === departmentFilter ||
+        (selectedDepartmentName !== null && log.department === selectedDepartmentName);
 
       return matchesSearch && matchesStatus && matchesDept;
     });
@@ -581,7 +587,7 @@ export default function AttendanceLogsPage() {
                   >
                     <option value="ALL">All Departments</option>
                     {departments.map((dept) => (
-                      <option key={dept.id} value={dept.name}>
+                      <option key={dept.id} value={dept.id}>
                         {dept.name}
                       </option>
                     ))}
