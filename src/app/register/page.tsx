@@ -132,11 +132,8 @@ export default function RegisterPage() {
     setError('');
 
     // Email validation
-    if (
-      !formData.adminEmail.includes('@') ||
-      !formData.adminEmail.toLowerCase().endsWith('.com')
-    ) {
-      setError('Email must be a valid .com address');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.adminEmail.trim())) {
+      setError('Please enter a valid email address');
       setLoading(false);
       return;
     }
