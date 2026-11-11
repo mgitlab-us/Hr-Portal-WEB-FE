@@ -75,6 +75,14 @@ interface Props {
 
 const AVATAR_FALLBACK = { bg: '#ECEFFE', text: '#5B6EF5' };
 
+const ASSIGNABLE_ROLES = ['EMPLOYEE', 'MANAGER', 'ADMIN'] as const;
+
+const ROLE_LABELS: Record<(typeof ASSIGNABLE_ROLES)[number], string> = {
+  EMPLOYEE: 'Employee',
+  MANAGER: 'Manager',
+  ADMIN: 'HR Admin',
+};
+
 export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, avatarColor }: Props) {
   const { toast } = useToast();
   const isSuperAdmin = useAuthStore((state) => state.user?.role === 'SUPER_ADMIN');
@@ -102,6 +110,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
     joiningDate: '',
     departmentId: '',
     shiftProfileId: '',
+    role: 'EMPLOYEE' as Employee['role'],
     managedDepartmentIds: [] as string[],
   });
 
@@ -131,6 +140,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         joiningDate: p?.joiningDate ? String(p.joiningDate).slice(0, 10) : '',
         departmentId: empRes.data.departmentId || '',
         shiftProfileId: empRes.data.shiftProfileId || '',
+        role: empRes.data.role || 'EMPLOYEE',
         managedDepartmentIds: (empRes.data.managedDepartments ?? []).map(
           (department: { id: string }) => department.id
         ),
@@ -177,6 +187,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         joiningDate: p?.joiningDate ? String(p.joiningDate).slice(0, 10) : '',
         departmentId: employee.departmentId || '',
         shiftProfileId: employee.shiftProfileId || '',
+        role: employee.role,
         managedDepartmentIds: (employee.managedDepartments ?? []).map(
           (department) => department.id
         ),
@@ -199,11 +210,20 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         payload.shiftProfileId = editInfo.shiftProfileId || null;
       }
 
-      if (
-        isSuperAdmin &&
-        (employee?.role === 'ADMIN' || employee?.role === 'MANAGER')
-      ) {
-        payload.managedDepartmentIds = editInfo.managedDepartmentIds;
+      const roleChanged = Boolean(
+        isSuperAdmin && employee && editInfo.role !== employee.role
+      );
+
+      if (isSuperAdmin) {
+        if (roleChanged) {
+          payload.role = editInfo.role;
+        }
+
+        if (editInfo.role === 'ADMIN' || editInfo.role === 'MANAGER') {
+          payload.managedDepartmentIds = editInfo.managedDepartmentIds;
+        } else if (roleChanged) {
+          payload.managedDepartmentIds = [];
+        }
       }
 
       if (editInfo.designationId === '__legacy__') {
@@ -533,7 +553,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                       <div className="flex items-center justify-between p-4 bg-blue-50/70 border border-blue-100 rounded-xl">
                         <div className="min-w-0 pr-3">
                           <p className="text-xs font-bold text-blue-900">Need to update this employee?</p>
-                          <p className="text-[11px] text-blue-700/80 mt-0.5">Modify designation, department, shift, salary, or banking records.</p>
+                          <p className="text-[11px] text-blue-700/80 mt-0.5">Modify role, designation, department, shift, salary, or banking records.</p>
                         </div>
                         <button
                           type="button"
@@ -610,6 +630,36 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                             />
                           </div>
 
+                          {isSuperAdmin && (
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">System Role</label>
+                              <select
+                                value={editInfo.role}
+                                onChange={(event) =>
+                                  setEditInfo((previous) => ({
+                                    ...previous,
+                                    role: event.target.value as Employee['role'],
+                                    managedDepartmentIds:
+                                      event.target.value === 'EMPLOYEE'
+                                        ? []
+                                        : previous.managedDepartmentIds,
+                                  }))
+                                }
+                                disabled={saving}
+                                className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
+                              >
+                                {ASSIGNABLE_ROLES.map((role) => (
+                                  <option key={role} value={role}>
+                                    {ROLE_LABELS[role]}
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="text-[10px] text-slate-400">
+                                Only Super Admins can change system roles.
+                              </p>
+                            </div>
+                          )}
+
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Mobile Number</label>
                             <input
@@ -660,7 +710,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                           </div>
 
                           {isSuperAdmin &&
-                            (employee?.role === 'ADMIN' || employee?.role === 'MANAGER') && (
+                            (editInfo.role === 'ADMIN' || editInfo.role === 'MANAGER') && (
                               <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
                                   Managed departments
@@ -699,6 +749,13 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                                   Home department is where this person sits. Managed departments are where
                                   they can approve or administer.
                                 </p>
+                                {editInfo.managedDepartmentIds.length === 0 && (
+                                  <p className="text-[10px] font-medium text-amber-600">
+                                    Select at least one department, otherwise this{' '}
+                                    {editInfo.role === 'ADMIN' ? 'HR admin' : 'manager'} will not see
+                                    employee data.
+                                  </p>
+                                )}
                               </div>
                             )}
 
