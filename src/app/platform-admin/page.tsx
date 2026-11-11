@@ -26,6 +26,16 @@ import {
   Inbox,
   ArrowRight,
   Layers,
+  Sliders,
+  Wallet,
+  FileCheck,
+  Plane,
+  Megaphone,
+  ScrollText,
+  BarChart3,
+  Phone,
+  Briefcase,
+  Gauge,
 } from 'lucide-react';
 
 /* ----------------------------- Types ----------------------------- */
@@ -37,6 +47,9 @@ interface CompanyItem {
   timezone: string;
   createdAt: string;
   updatedAt: string;
+  features?: Record<string, boolean>;
+  maxEmployees?: number | null;
+  maxDepartments?: number | null;
   employees?: Array<{
     name: string;
     email: string;
@@ -47,6 +60,119 @@ interface CompanyItem {
     departments: number;
   };
 }
+
+interface CompanyDetails {
+  id: string;
+  name: string;
+  isActive: boolean;
+  timezone: string;
+  logo?: string | null;
+  workMinutesPerDay: number;
+  breakMinutesAllocated: number;
+  gracePeriodMinutes: number;
+  expectedCheckinHour: number;
+  expectedCheckinMinute: number;
+  officeLat?: number | null;
+  officeLng?: number | null;
+  officeRadius?: number | null;
+  weekends?: number[];
+  sickLeaveDays?: number;
+  casualLeaveDays?: number;
+  vacationLeaveDays?: number;
+  features: Record<string, boolean>;
+  maxEmployees?: number | null;
+  maxDepartments?: number | null;
+  createdAt: string;
+  updatedAt: string;
+  departments: Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+    _count: { employees: number };
+    admins: Array<{ employee: { id: string; name: string; email: string } }>;
+    managers: Array<{ employee: { id: string; name: string; email: string } }>;
+  }>;
+  employees: Array<{
+    id: string;
+    name: string;
+    email: string;
+    isActive: boolean;
+    createdAt: string;
+    profile?: { phone?: string | null; designation?: string | null } | null;
+  }>;
+  stats: {
+    totalEmployees: number;
+    activeEmployees: number;
+    inactiveEmployees: number;
+    totalDepartments: number;
+    totalShiftProfiles: number;
+    totalNotices: number;
+    totalGroups: number;
+    roles: {
+      superAdmin: number;
+      admin: number;
+      manager: number;
+      employee: number;
+    };
+  };
+}
+
+const AVAILABLE_FEATURES = [
+  {
+    key: 'payroll',
+    name: 'Payroll & Payslips',
+    description: 'Salary structures, monthly payments disbursement, and branded PDF payslips.',
+    icon: Wallet,
+  },
+  {
+    key: 'corrections',
+    name: 'Attendance Corrections',
+    description: 'Employee punch edit requests and multi-tier approval workflows.',
+    icon: FileCheck,
+  },
+  {
+    key: 'leaves',
+    name: 'Leaves & Time Off',
+    description: 'Leave quota management, anniversary cycles, and approver balance reviews.',
+    icon: Plane,
+  },
+  {
+    key: 'noticeBoard',
+    name: 'Notice Board',
+    description: 'Company-wide and department-targeted broadcast announcements.',
+    icon: Megaphone,
+  },
+  {
+    key: 'shifts',
+    name: 'Custom Shifts',
+    description: 'Custom shift templates, flexible working hours, and grace allowances.',
+    icon: Clock,
+  },
+  {
+    key: 'groups',
+    name: 'Collaboration Groups',
+    description: 'Team workspaces, internal messaging channels, and meeting calendar.',
+    icon: Users,
+  },
+  {
+    key: 'auditLogs',
+    name: 'Audit Trail',
+    description: 'Immutable security log of admin actions, salary changes, and settings.',
+    icon: ScrollText,
+  },
+  {
+    key: 'documents',
+    name: 'Employee Documents',
+    description: 'Encrypted document vault for contracts, credentials, and verification files.',
+    icon: FileText,
+  },
+  {
+    key: 'analytics',
+    name: 'Advanced Analytics',
+    description: 'Monthly exportable reports, attendance pulse trends, and company metrics.',
+    icon: BarChart3,
+  },
+];
 
 interface OnboardingRequestItem {
   id: string;
@@ -248,6 +374,7 @@ function Modal({
   onClose,
   children,
   footer,
+  maxWidth = 'max-w-md',
 }: {
   title: string;
   subtitle?: string;
@@ -256,6 +383,7 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
   footer: React.ReactNode;
+  maxWidth?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -273,10 +401,10 @@ function Modal({
       aria-modal="true"
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white shadow-2xl"
+        className={`w-full ${maxWidth} max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start gap-3 px-6 pt-6">
+        <div className="flex items-start gap-3 px-6 pt-6 flex-shrink-0">
           <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${iconClass}`}>
             {icon}
           </div>
@@ -293,8 +421,8 @@ function Modal({
             <X size={18} />
           </button>
         </div>
-        <div className="px-6 py-5 text-sm leading-relaxed text-slate-600">{children}</div>
-        <div className="flex justify-end gap-2 rounded-b-2xl bg-slate-50 px-6 py-4">{footer}</div>
+        <div className="px-6 py-5 text-sm leading-relaxed text-slate-600 overflow-y-auto flex-1">{children}</div>
+        <div className="flex justify-end gap-2 bg-slate-50 px-6 py-4 flex-shrink-0 border-t border-slate-100">{footer}</div>
       </div>
     </div>
   );
@@ -328,6 +456,26 @@ export default function PlatformAdminDashboardPage() {
   const [rejectModal, setRejectModal] = useState<OnboardingRequestItem | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+
+  // Company details & module permissions modal
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [companyDetails, setCompanyDetails] = useState<CompanyDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [detailsSubTab, setDetailsSubTab] = useState<'FEATURES' | 'LIMITS' | 'OVERVIEW' | 'DEPARTMENTS'>('FEATURES');
+  const [editingFeatures, setEditingFeatures] = useState<Record<string, boolean>>({});
+  const [savingFeatures, setSavingFeatures] = useState(false);
+  const [editingLimits, setEditingLimits] = useState<{
+    maxEmployees: number | null;
+    maxDepartments: number | null;
+    unlimitedEmployees: boolean;
+    unlimitedDepartments: boolean;
+  }>({
+    maxEmployees: 50,
+    maxDepartments: 10,
+    unlimitedEmployees: false,
+    unlimitedDepartments: false,
+  });
+  const [savingLimits, setSavingLimits] = useState(false);
 
   const showToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
     setToast({ message, type });
@@ -439,6 +587,99 @@ export default function PlatformAdminDashboardPage() {
       showToast(getErrorMessage(err, 'Failed to reject onboarding request.'));
     } finally {
       setProcessingRequestId(null);
+    }
+  };
+
+  const openCompanyDetails = async (companyId: string) => {
+    setSelectedCompanyId(companyId);
+    setLoadingDetails(true);
+    setDetailsSubTab('FEATURES');
+    try {
+      const res = await api.get(`/platform-admin/companies/${companyId}`);
+      setCompanyDetails(res.data);
+      setEditingFeatures(res.data.features || {});
+      setEditingLimits({
+        maxEmployees: res.data.maxEmployees ?? 50,
+        maxDepartments: res.data.maxDepartments ?? 10,
+        unlimitedEmployees: res.data.maxEmployees == null,
+        unlimitedDepartments: res.data.maxDepartments == null,
+      });
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, 'Failed to load organization details.'));
+      setSelectedCompanyId(null);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const handleSaveFeatures = async () => {
+    if (!selectedCompanyId) return;
+    setSavingFeatures(true);
+    try {
+      const res = await api.patch(`/platform-admin/companies/${selectedCompanyId}/features`, {
+        features: editingFeatures,
+      });
+      showToast(res.data?.message || 'Module access updated successfully.', 'success');
+      if (companyDetails) {
+        setCompanyDetails({
+          ...companyDetails,
+          features: res.data?.features || editingFeatures,
+        });
+      }
+      setCompanies((prev) =>
+        prev.map((c) =>
+          c.id === selectedCompanyId ? { ...c, features: res.data?.features || editingFeatures } : c
+        )
+      );
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, 'Failed to update module access.'));
+    } finally {
+      setSavingFeatures(false);
+    }
+  };
+
+  const handleSaveLimits = async () => {
+    if (!selectedCompanyId) return;
+    const maxEmployees = editingLimits.unlimitedEmployees ? null : editingLimits.maxEmployees;
+    const maxDepartments = editingLimits.unlimitedDepartments ? null : editingLimits.maxDepartments;
+    if (!editingLimits.unlimitedEmployees && (!maxEmployees || maxEmployees < 1)) {
+      showToast('Employee cap must be at least 1, or mark it unlimited.');
+      return;
+    }
+    if (!editingLimits.unlimitedDepartments && (!maxDepartments || maxDepartments < 1)) {
+      showToast('Department cap must be at least 1, or mark it unlimited.');
+      return;
+    }
+    setSavingLimits(true);
+    try {
+      const res = await api.patch(`/platform-admin/companies/${selectedCompanyId}/limits`, {
+        maxEmployees,
+        maxDepartments,
+      });
+      showToast(res.data?.message || 'Capacity limits updated successfully.', 'success');
+      const nextLimits = res.data?.company;
+      if (companyDetails) {
+        setCompanyDetails({
+          ...companyDetails,
+          maxEmployees: nextLimits?.maxEmployees ?? maxEmployees,
+          maxDepartments: nextLimits?.maxDepartments ?? maxDepartments,
+        });
+      }
+      setCompanies((prev) =>
+        prev.map((c) =>
+          c.id === selectedCompanyId
+            ? {
+                ...c,
+                maxEmployees: nextLimits?.maxEmployees ?? maxEmployees,
+                maxDepartments: nextLimits?.maxDepartments ?? maxDepartments,
+              }
+            : c
+        )
+      );
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, 'Failed to update capacity limits.'));
+    } finally {
+      setSavingLimits(false);
     }
   };
 
@@ -853,15 +1094,24 @@ export default function PlatformAdminDashboardPage() {
                             >
                               <td className="px-5 py-4">
                                 <div className="flex items-center gap-3">
-                                  <Avatar name={company.name} muted={!company.isActive} />
+                                  <button
+                                    type="button"
+                                    onClick={() => openCompanyDetails(company.id)}
+                                    className="cursor-pointer transition hover:opacity-80"
+                                    title="View organization details & module access"
+                                  >
+                                    <Avatar name={company.name} muted={!company.isActive} />
+                                  </button>
                                   <div className="min-w-0">
-                                    <div
-                                      className={`font-semibold ${
-                                        company.isActive ? 'text-slate-900' : 'text-slate-500'
+                                    <button
+                                      type="button"
+                                      onClick={() => openCompanyDetails(company.id)}
+                                      className={`block text-left font-semibold transition cursor-pointer hover:underline ${
+                                        company.isActive ? 'text-slate-900 hover:text-blue-600' : 'text-slate-500 hover:text-slate-700'
                                       }`}
                                     >
                                       {company.name}
-                                    </div>
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => copyToClipboard(company.id)}
@@ -897,12 +1147,16 @@ export default function PlatformAdminDashboardPage() {
                                 <div className="flex items-center gap-1.5 text-slate-700">
                                   <Users size={14} className="text-slate-400" />
                                   <span className="font-semibold tabular-nums">{company._count.employees}</span>
-                                  <span className="text-xs text-slate-500">employees</span>
+                                  <span className="text-xs text-slate-500">
+                                    {company.maxEmployees != null ? `/ ${company.maxEmployees} employees` : 'employees · unlimited'}
+                                  </span>
                                 </div>
                                 <div className="mt-0.5 flex items-center gap-1.5 text-slate-700">
                                   <Layers size={14} className="text-slate-400" />
                                   <span className="font-semibold tabular-nums">{company._count.departments}</span>
-                                  <span className="text-xs text-slate-500">departments</span>
+                                  <span className="text-xs text-slate-500">
+                                    {company.maxDepartments != null ? `/ ${company.maxDepartments} depts` : 'depts · unlimited'}
+                                  </span>
                                 </div>
                               </td>
 
@@ -916,7 +1170,7 @@ export default function PlatformAdminDashboardPage() {
                               <td className="px-5 py-4 text-slate-600">{formatDate(company.createdAt)}</td>
 
                               <td className="px-5 py-4">
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2.5">
                                   {isToggling ? (
                                     <Loader2 size={20} className="animate-spin text-slate-400" />
                                   ) : (
@@ -940,6 +1194,16 @@ export default function PlatformAdminDashboardPage() {
                                     />
                                     {company.isActive ? 'Active' : 'Suspended'}
                                   </span>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => openCompanyDetails(company.id)}
+                                    className="ml-auto inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-2xs hover:border-blue-300 hover:bg-blue-50/50 hover:text-blue-700 transition cursor-pointer"
+                                    title="View organization details & module access"
+                                  >
+                                    <Sliders size={12} className="text-blue-600" />
+                                    Details
+                                  </button>
                                 </div>
                               </td>
                             </tr>
@@ -1229,6 +1493,492 @@ export default function PlatformAdminDashboardPage() {
             rows={3}
             className="w-full rounded-xl border border-slate-300 p-3 text-sm text-slate-900 placeholder-slate-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
           />
+        </Modal>
+      )}
+
+      {/* ============ Organization Details & Module Access Modal ============ */}
+      {selectedCompanyId && (
+        <Modal
+          title={companyDetails?.name || 'Organization Details'}
+          subtitle={companyDetails ? `ID: ${companyDetails.id}` : 'Loading details…'}
+          icon={<Building2 size={22} />}
+          iconClass="bg-blue-100 text-blue-600"
+          maxWidth="max-w-3xl"
+          onClose={() => {
+            setSelectedCompanyId(null);
+            setCompanyDetails(null);
+          }}
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCompanyId(null);
+                  setCompanyDetails(null);
+                }}
+                className={btnSecondary}
+              >
+                Close
+              </button>
+              {detailsSubTab === 'FEATURES' && (
+                <button
+                  type="button"
+                  disabled={savingFeatures || loadingDetails}
+                  onClick={handleSaveFeatures}
+                  className={`${btnSuccess} flex items-center gap-1.5`}
+                >
+                  {savingFeatures ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Check size={15} />
+                      Save Module Access
+                    </>
+                  )}
+                </button>
+              )}
+              {detailsSubTab === 'LIMITS' && (
+                <button
+                  type="button"
+                  disabled={savingLimits || loadingDetails}
+                  onClick={handleSaveLimits}
+                  className={`${btnSuccess} flex items-center gap-1.5`}
+                >
+                  {savingLimits ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Check size={15} />
+                      Save Capacity Limits
+                    </>
+                  )}
+                </button>
+              )}
+            </>
+          }
+        >
+          {loadingDetails || !companyDetails ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Loader2 size={28} className="animate-spin text-blue-600" />
+              <p className="mt-3 text-sm text-slate-500">Loading organization details and module settings…</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* Top Status & Tabs Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      companyDetails.isActive
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        companyDetails.isActive ? 'bg-green-500' : 'bg-red-500'
+                      }`}
+                    />
+                    {companyDetails.isActive ? 'Active Tenant' : 'Suspended Tenant'}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                    <Globe size={12} className="text-slate-400" />
+                    {companyDetails.timezone}
+                  </span>
+                </div>
+
+                {/* Sub tabs */}
+                <div className="flex items-center rounded-xl bg-slate-100 p-1 text-xs font-medium text-slate-600">
+                  <button
+                    type="button"
+                    onClick={() => setDetailsSubTab('FEATURES')}
+                    className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                      detailsSubTab === 'FEATURES'
+                        ? 'bg-white font-semibold text-blue-700 shadow-xs'
+                        : 'hover:text-slate-900'
+                    }`}
+                  >
+                    Module Permissions
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailsSubTab('LIMITS')}
+                    className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                      detailsSubTab === 'LIMITS'
+                        ? 'bg-white font-semibold text-blue-700 shadow-xs'
+                        : 'hover:text-slate-900'
+                    }`}
+                  >
+                    Capacity Limits
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailsSubTab('OVERVIEW')}
+                    className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                      detailsSubTab === 'OVERVIEW'
+                        ? 'bg-white font-semibold text-blue-700 shadow-xs'
+                        : 'hover:text-slate-900'
+                    }`}
+                  >
+                    Work Setup &amp; Owner
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailsSubTab('DEPARTMENTS')}
+                    className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                      detailsSubTab === 'DEPARTMENTS'
+                        ? 'bg-white font-semibold text-blue-700 shadow-xs'
+                        : 'hover:text-slate-900'
+                    }`}
+                  >
+                    Departments &amp; Staff ({companyDetails.stats.totalEmployees})
+                  </button>
+                </div>
+              </div>
+
+              {/* TAB 1: MODULE PERMISSIONS */}
+              {detailsSubTab === 'FEATURES' && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3.5 text-xs text-blue-900">
+                    <p className="font-semibold">Granular Organization Entitlements</p>
+                    <p className="mt-0.5 text-blue-700">
+                      Toggle modules on or off for this organization. Restricted modules are immediately hidden from all sidebar menus and direct API access is rejected with a 403 Forbidden.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {AVAILABLE_FEATURES.map((feat) => {
+                      const Icon = feat.icon;
+                      const isEnabled = editingFeatures[feat.key] !== false;
+
+                      return (
+                        <div
+                          key={feat.key}
+                          className={`flex items-start justify-between gap-3 rounded-xl border p-3.5 transition ${
+                            isEnabled
+                              ? 'border-slate-200 bg-white hover:border-blue-200'
+                              : 'border-amber-200 bg-amber-50/40'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div
+                              className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
+                                isEnabled
+                                  ? 'bg-blue-100 text-blue-600'
+                                  : 'bg-amber-100 text-amber-700'
+                              }`}
+                            >
+                              <Icon size={18} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-900 text-sm">
+                                  {feat.name}
+                                </span>
+                                <span
+                                  className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                                    isEnabled
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-amber-200 text-amber-800'
+                                  }`}
+                                >
+                                  {isEnabled ? 'Enabled' : 'Restricted'}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs text-slate-500 line-clamp-2">
+                                {feat.description}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex-shrink-0 pt-0.5">
+                            <Switch
+                              checked={isEnabled}
+                              label={`Toggle ${feat.name}`}
+                              onChange={() => {
+                                setEditingFeatures((prev) => ({
+                                  ...prev,
+                                  [feat.key]: !isEnabled,
+                                }));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: CAPACITY LIMITS */}
+              {detailsSubTab === 'LIMITS' && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3.5 text-xs text-blue-900">
+                    <p className="font-semibold">Plan capacity for this organization</p>
+                    <p className="mt-0.5 text-blue-700">
+                      Caps block new employees and departments once reached. Existing records stay; lowering a cap below current usage only prevents further growth. Null/unlimited removes the cap.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                          <Users size={18} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold text-slate-900">Employee seats</h3>
+                          <p className="text-xs text-slate-500">
+                            Using {companyDetails.stats.activeEmployees}
+                            {companyDetails.maxEmployees != null ? ` of ${companyDetails.maxEmployees}` : ' (unlimited)'}
+                          </p>
+                        </div>
+                      </div>
+                      <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={editingLimits.unlimitedEmployees}
+                          onChange={(e) =>
+                            setEditingLimits((prev) => ({
+                              ...prev,
+                              unlimitedEmployees: e.target.checked,
+                              maxEmployees: e.target.checked ? prev.maxEmployees : prev.maxEmployees || 50,
+                            }))
+                          }
+                        />
+                        Unlimited employees
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        disabled={editingLimits.unlimitedEmployees}
+                        value={editingLimits.unlimitedEmployees ? '' : editingLimits.maxEmployees ?? ''}
+                        onChange={(e) =>
+                          setEditingLimits((prev) => ({
+                            ...prev,
+                            maxEmployees: e.target.value === '' ? null : Number(e.target.value),
+                          }))
+                        }
+                        className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-400"
+                        placeholder="e.g. 50"
+                      />
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                          <Layers size={18} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold text-slate-900">Departments</h3>
+                          <p className="text-xs text-slate-500">
+                            Using {companyDetails.stats.totalDepartments}
+                            {companyDetails.maxDepartments != null ? ` of ${companyDetails.maxDepartments}` : ' (unlimited)'}
+                          </p>
+                        </div>
+                      </div>
+                      <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={editingLimits.unlimitedDepartments}
+                          onChange={(e) =>
+                            setEditingLimits((prev) => ({
+                              ...prev,
+                              unlimitedDepartments: e.target.checked,
+                              maxDepartments: e.target.checked ? prev.maxDepartments : prev.maxDepartments || 10,
+                            }))
+                          }
+                        />
+                        Unlimited departments
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        disabled={editingLimits.unlimitedDepartments}
+                        value={editingLimits.unlimitedDepartments ? '' : editingLimits.maxDepartments ?? ''}
+                        onChange={(e) =>
+                          setEditingLimits((prev) => ({
+                            ...prev,
+                            maxDepartments: e.target.value === '' ? null : Number(e.target.value),
+                          }))
+                        }
+                        className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-400"
+                        placeholder="e.g. 10"
+                      />
+                    </div>
+                  </div>
+
+                  {(companyDetails.maxEmployees != null &&
+                    companyDetails.stats.activeEmployees >= companyDetails.maxEmployees) ||
+                  (companyDetails.maxDepartments != null &&
+                    companyDetails.stats.totalDepartments >= companyDetails.maxDepartments) ? (
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                      <Gauge size={14} className="mt-0.5 flex-shrink-0" />
+                      <span>This organization is currently at one or more caps. New creates will be rejected until you raise the limit.</span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* TAB 3: WORK SETUP & OWNER */}
+              {detailsSubTab === 'OVERVIEW' && (
+                <div className="space-y-4">
+                  {/* Super admin owner card */}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Organization Super Admin (Owner)
+                    </h3>
+                    {companyDetails.employees && companyDetails.employees.length > 0 ? (
+                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div className="flex items-center gap-2 text-slate-800">
+                          <Users size={15} className="text-slate-400" />
+                          <span className="font-medium">{companyDetails.employees[0].name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-800">
+                          <Mail size={15} className="text-slate-400" />
+                          <span>{companyDetails.employees[0].email}</span>
+                        </div>
+                        {companyDetails.employees[0].profile?.phone && (
+                          <div className="flex items-center gap-2 text-slate-800">
+                            <Phone size={15} className="text-slate-400" />
+                            <span>{companyDetails.employees[0].profile.phone}</span>
+                          </div>
+                        )}
+                        {companyDetails.employees[0].profile?.designation && (
+                          <div className="flex items-center gap-2 text-slate-800">
+                            <Briefcase size={15} className="text-slate-400" />
+                            <span>{companyDetails.employees[0].profile.designation}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <Clock size={14} className="text-slate-400" />
+                          <span>Joined {formatDate(companyDetails.employees[0].createdAt)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs italic text-slate-400">No Super Admin record found</p>
+                    )}
+                  </div>
+
+                  {/* Operational Settings */}
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+                      Work &amp; Attendance Configuration
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                        <span className="text-slate-500">Standard Work Day</span>
+                        <div className="mt-1 font-semibold text-slate-800 text-sm">
+                          {Math.floor(companyDetails.workMinutesPerDay / 60)} hrs ({companyDetails.workMinutesPerDay} mins)
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                        <span className="text-slate-500">Break Allocation</span>
+                        <div className="mt-1 font-semibold text-slate-800 text-sm">
+                          {companyDetails.breakMinutesAllocated} mins
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                        <span className="text-slate-500">Grace Period</span>
+                        <div className="mt-1 font-semibold text-slate-800 text-sm">
+                          {companyDetails.gracePeriodMinutes} mins
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                        <span className="text-slate-500">Expected Check-in</span>
+                        <div className="mt-1 font-semibold text-slate-800 text-sm">
+                          {String(companyDetails.expectedCheckinHour).padStart(2, '0')}:
+                          {String(companyDetails.expectedCheckinMinute).padStart(2, '0')}
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                        <span className="text-slate-500">Office Radius</span>
+                        <div className="mt-1 font-semibold text-slate-800 text-sm">
+                          {companyDetails.officeRadius || 70} meters
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                        <span className="text-slate-500">Registered Date</span>
+                        <div className="mt-1 font-semibold text-slate-800 text-sm">
+                          {formatDate(companyDetails.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: DEPARTMENTS & STAFF */}
+              {detailsSubTab === 'DEPARTMENTS' && (
+                <div className="space-y-4">
+                  {/* Role metrics */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                      <span className="text-slate-500">Super Admins</span>
+                      <div className="mt-1 text-base font-bold text-slate-900">
+                        {companyDetails.stats.roles.superAdmin}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                      <span className="text-slate-500">HR Admins</span>
+                      <div className="mt-1 text-base font-bold text-slate-900">
+                        {companyDetails.stats.roles.admin}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                      <span className="text-slate-500">Managers</span>
+                      <div className="mt-1 text-base font-bold text-slate-900">
+                        {companyDetails.stats.roles.manager}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                      <span className="text-slate-500">Employees</span>
+                      <div className="mt-1 text-base font-bold text-slate-900">
+                        {companyDetails.stats.roles.employee}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Department list */}
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Departments ({companyDetails.departments.length})
+                    </h3>
+                    {companyDetails.departments.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
+                        No departments created yet in this organization.
+                      </p>
+                    ) : (
+                      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+                        {companyDetails.departments.map((dept) => (
+                          <div key={dept.id} className="flex items-center justify-between p-3 text-xs">
+                            <div>
+                              <div className="font-semibold text-slate-800 text-sm">{dept.name}</div>
+                              <div className="mt-0.5 text-slate-500">
+                                {dept.admins.length > 0
+                                  ? `HR Lead: ${dept.admins.map((a) => a.employee.name).join(', ')}`
+                                  : 'No HR lead assigned'}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
+                              <Users size={13} className="text-slate-400" />
+                              <span>{dept._count.employees} staff</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </Modal>
       )}
 

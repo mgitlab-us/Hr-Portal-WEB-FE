@@ -49,6 +49,10 @@ export default function DepartmentsPage() {
     managerIds: [],
   });
   const [view, setView] = useState<'chart' | 'table'>('chart');
+  const [orgLimits, setOrgLimits] = useState<{
+    maxDepartments: number | null;
+    departmentCount: number;
+  } | null>(null);
   const canEditDepartments = user?.role === 'SUPER_ADMIN';
   const canOpenPage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
   const canAssignDepartment = (dept: Department) =>
@@ -81,6 +85,16 @@ export default function DepartmentsPage() {
           .filter((e) => e.role === 'MANAGER')
           .map((e) => ({ id: e.id, name: e.name, email: e.email }))
       );
+      if (user?.role === 'SUPER_ADMIN') {
+        const profileRes = await api.get('/attendance/settings/company-profile').catch(() => null);
+        const limits = profileRes?.data?.limits;
+        if (limits) {
+          setOrgLimits({
+            maxDepartments: limits.maxDepartments ?? null,
+            departmentCount: limits.departmentCount ?? deptRes.data?.length ?? 0,
+          });
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch departments:', err);
     } finally {
@@ -95,7 +109,17 @@ export default function DepartmentsPage() {
     }
   }, [user, canOpenPage]);
 
+  const departmentCapReached =
+    orgLimits?.maxDepartments != null &&
+    (orgLimits.departmentCount ?? departments.length) >= orgLimits.maxDepartments;
+
   const openCreate = () => {
+    if (departmentCapReached) {
+      toast.error(
+        `Department capacity reached (${orgLimits?.departmentCount}/${orgLimits?.maxDepartments}). Contact your platform administrator to upgrade.`
+      );
+      return;
+    }
     setForm({ name: '', adminIds: [], managerIds: [] });
     setModal({ mode: 'create' });
   };
@@ -181,6 +205,9 @@ export default function DepartmentsPage() {
               {canEditDepartments
                 ? 'Create departments, assign HR admins, and assign reporting managers'
                 : 'View every department. Rules are editable only for departments you administer.'}
+              {orgLimits?.maxDepartments != null
+                ? ` · ${orgLimits.departmentCount} / ${orgLimits.maxDepartments} departments`
+                : ''}
             </p>
           </div>
           <div className="flex items-center flex-wrap gap-2">
@@ -217,7 +244,13 @@ export default function DepartmentsPage() {
             {canEditDepartments && (
               <button
                 onClick={openCreate}
-                className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
+                disabled={departmentCapReached}
+                title={
+                  departmentCapReached
+                    ? `Department capacity reached (${orgLimits?.departmentCount}/${orgLimits?.maxDepartments})`
+                    : undefined
+                }
+                className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={14} />
                 Add Department

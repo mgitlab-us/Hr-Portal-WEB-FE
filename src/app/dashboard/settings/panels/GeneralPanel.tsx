@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Clock, Save, Loader2, ShieldCheck, Building2, Timer,
-  ChevronDown, Globe,
+  ChevronDown, Globe, Users, Layers,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
@@ -51,6 +51,12 @@ export default function GeneralPanel() {
     casualLeaveDays: 10,
     vacationLeaveDays: 14,
   });
+  const [capacity, setCapacity] = useState<{
+    maxEmployees: number | null;
+    maxDepartments: number | null;
+    activeEmployees: number;
+    departmentCount: number;
+  } | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -86,7 +92,24 @@ export default function GeneralPanel() {
           expectedCheckinHour: startHour,
           expectedCheckinMinute: startMinute,
         });
-        setProfile((prev) => ({ ...prev, ...profileRes.data }));
+        const profileData = profileRes.data ?? {};
+        const {
+          limits,
+          maxEmployees: _maxEmployees,
+          maxDepartments: _maxDepartments,
+          ...profileFields
+        } = profileData;
+        void _maxEmployees;
+        void _maxDepartments;
+        setProfile((prev) => ({ ...prev, ...profileFields }));
+        if (limits) {
+          setCapacity({
+            maxEmployees: limits.maxEmployees ?? null,
+            maxDepartments: limits.maxDepartments ?? null,
+            activeEmployees: limits.activeEmployees ?? 0,
+            departmentCount: limits.departmentCount ?? 0,
+          });
+        }
         setLocalCheckin({
           hour: startHour % 12 || 12,
           minute: startMinute,
@@ -169,7 +192,17 @@ export default function GeneralPanel() {
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     try {
-      await api.put('/attendance/settings/company-profile', profile);
+      await api.put('/attendance/settings/company-profile', {
+        name: profile.name,
+        timezone: profile.timezone,
+        officeLat: profile.officeLat,
+        officeLng: profile.officeLng,
+        officeRadius: profile.officeRadius,
+        logo: profile.logo,
+        sickLeaveDays: profile.sickLeaveDays,
+        casualLeaveDays: profile.casualLeaveDays,
+        vacationLeaveDays: profile.vacationLeaveDays,
+      });
       toast.success('Company profile updated.');
     } catch { toast.error('Failed to update the company profile.'); }
     finally { setSavingProfile(false); }
@@ -195,6 +228,40 @@ export default function GeneralPanel() {
           <Building2 size={13} className="text-slate-400" />
           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Company Profile</p>
         </div>
+
+        {capacity && (
+          <div className="bg-white border border-slate-100 rounded-xl shadow-sm">
+            <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-50">
+              <Users size={12} className="text-slate-400" />
+              <h3 className="text-sm font-semibold text-slate-700">Plan capacity</h3>
+            </div>
+            <div className="px-5 py-4 grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <Users size={11} />
+                  Employees
+                </div>
+                <p className="mt-1 text-sm font-semibold text-slate-800">
+                  {capacity.activeEmployees}
+                  {capacity.maxEmployees != null ? ` / ${capacity.maxEmployees}` : ' · unlimited'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <Layers size={11} />
+                  Departments
+                </div>
+                <p className="mt-1 text-sm font-semibold text-slate-800">
+                  {capacity.departmentCount}
+                  {capacity.maxDepartments != null ? ` / ${capacity.maxDepartments}` : ' · unlimited'}
+                </p>
+              </div>
+            </div>
+            <p className="px-5 pb-4 text-[11px] text-slate-400">
+              Seat and department caps are set by the platform administrator. Contact support to raise them.
+            </p>
+          </div>
+        )}
 
         <div className="bg-white border border-slate-100 rounded-xl shadow-sm">
           <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-50">

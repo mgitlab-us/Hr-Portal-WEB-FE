@@ -107,16 +107,18 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(() => {
+  const [error, setError] = useState('');
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
       const errParam = searchParams.get('error');
       if (errParam) {
-        return decodeURIComponent(errParam);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setError(decodeURIComponent(errParam));
       }
     }
-    return '';
-  });
+  }, []);
 
   useEffect(() => {
     if (user && accessToken) {

@@ -177,6 +177,10 @@ export default function EmployeesPage() {
     employeeCode: string;
   } | null>(null);
   const [shifts, setShifts] = useState<ShiftProfile[]>([]);
+  const [orgLimits, setOrgLimits] = useState<{
+    maxEmployees: number | null;
+    activeEmployees: number;
+  } | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ type: 'DEACTIVATE' | 'ARCHIVE'; id: string; name: string } | null>(null);
   const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
@@ -256,6 +260,17 @@ export default function EmployeesPage() {
     api.get('/departments').then(res => {
       setDepartments(res.data);
     }).catch(() => { });
+    if (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') {
+      api.get('/attendance/settings/company-profile').then((res) => {
+        const limits = res.data?.limits;
+        if (limits) {
+          setOrgLimits({
+            maxEmployees: limits.maxEmployees ?? null,
+            activeEmployees: limits.activeEmployees ?? 0,
+          });
+        }
+      }).catch(() => {});
+    }
   }, [user]);
 
   useEffect(() => {
@@ -375,8 +390,16 @@ export default function EmployeesPage() {
   }, [departments, user]);
 
   const creationDepartments = user?.role === 'SUPER_ADMIN' ? departments : assignableDepartments;
+  const employeeCapReached =
+    orgLimits?.maxEmployees != null && orgLimits.activeEmployees >= orgLimits.maxEmployees;
 
   const openCreate = () => {
+    if (employeeCapReached) {
+      toast.error(
+        `Employee capacity reached (${orgLimits?.activeEmployees}/${orgLimits?.maxEmployees}). Contact your platform administrator to upgrade.`
+      );
+      return;
+    }
     const departmentId = user?.role === 'ADMIN' && creationDepartments.length === 1
       ? creationDepartments[0].id
       : '';
@@ -504,6 +527,9 @@ export default function EmployeesPage() {
       const createdEmp = res.data as { name?: string; email?: string; profile?: { employeeCode?: string } };
       setIsAddModalOpen(false);
       fetchEmployees(scope);
+      setOrgLimits((prev) =>
+        prev ? { ...prev, activeEmployees: prev.activeEmployees + 1 } : prev
+      );
       setNewEmployee({
         name: '',
         email: '',
@@ -542,8 +568,9 @@ export default function EmployeesPage() {
       await api.patch(`/employees/${id}/toggle-status`);
       setConfirmModal(null);
       fetchEmployees(scope);
-    } catch {
-      toast.error('Action failed.');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e?.response?.data?.message || 'Action failed.');
     }
   };
 
@@ -601,13 +628,25 @@ export default function EmployeesPage() {
             {!isCompanyScope && (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
               <button
                 onClick={openCreate}
-                className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg"
+                disabled={employeeCapReached}
+                title={
+                  employeeCapReached
+                    ? `Employee capacity reached (${orgLimits?.activeEmployees}/${orgLimits?.maxEmployees})`
+                    : undefined
+                }
+                className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-sm font-medium rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <UserPlus size={14} />
                 Add Employee
               </button>
             )}
           </div>
+          {orgLimits?.maxEmployees != null && !isCompanyScope && (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+            <p className={`text-xs ${employeeCapReached ? 'text-amber-700' : 'text-slate-400'}`}>
+              Employee seats: {orgLimits.activeEmployees} / {orgLimits.maxEmployees}
+              {employeeCapReached ? ' · Contact your platform administrator to raise this limit.' : ''}
+            </p>
+          )}
           {showScopeTabs && (
             <div className="inline-flex w-fit items-center rounded-lg bg-slate-100 p-0.5">
               <button
