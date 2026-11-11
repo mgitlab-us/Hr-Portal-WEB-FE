@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Building2, Plus, X, Loader2, Trash2, Pencil, Users, UserCog,
   LayoutGrid, TableProperties, Settings2, UserPlus,
@@ -65,7 +65,9 @@ export default function DepartmentsPage() {
     }
   }, [user, router, canOpenPage]);
 
-  const fetchData = async () => {
+  const userRole = user?.role;
+
+  const fetchData = useCallback(async () => {
     try {
       const [deptRes, empRes] = await Promise.all([
         api.get('/departments'),
@@ -85,7 +87,7 @@ export default function DepartmentsPage() {
           .filter((e) => e.role === 'MANAGER')
           .map((e) => ({ id: e.id, name: e.name, email: e.email }))
       );
-      if (user?.role === 'SUPER_ADMIN') {
+      if (userRole === 'SUPER_ADMIN') {
         const profileRes = await api.get('/attendance/settings/company-profile').catch(() => null);
         const limits = profileRes?.data?.limits;
         if (limits) {
@@ -100,14 +102,14 @@ export default function DepartmentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userRole]);
 
   useEffect(() => {
     if (canOpenPage && !user?.mustChangePassword) {
       const init = async () => { await fetchData(); };
       init();
     }
-  }, [user, canOpenPage]);
+  }, [user, canOpenPage, fetchData]);
 
   const departmentCapReached =
     orgLimits?.maxDepartments != null &&
