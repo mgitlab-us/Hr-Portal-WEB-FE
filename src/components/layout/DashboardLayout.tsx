@@ -69,6 +69,27 @@ const adminDepartmentSetupNavItem: NavEntry = {
   label: 'Department Setup',
 };
 
+const LABEL_TO_FEATURE_KEY: Record<string, string> = {
+  Payroll: 'payroll',
+  Corrections: 'corrections',
+  Leaves: 'leaves',
+  'Notice Board': 'noticeBoard',
+  Groups: 'groups',
+  'Audit Logs': 'auditLogs',
+  Analytics: 'analytics',
+};
+
+const PATH_TO_FEATURE_KEY: Record<string, string> = {
+  '/dashboard/payroll': 'payroll',
+  '/dashboard/corrections': 'corrections',
+  '/dashboard/leaves': 'leaves',
+  '/dashboard/notice-board': 'noticeBoard',
+  '/dashboard/groups': 'groups',
+  '/dashboard/audit-logs': 'auditLogs',
+  '/dashboard/analytics': 'analytics',
+  '/dashboard/shifts': 'shifts',
+};
+
 /**
  * Role-aware nav list, shared by the sidebar and the header quick-search.
  *
@@ -78,9 +99,13 @@ const adminDepartmentSetupNavItem: NavEntry = {
  * - MANAGER: team reads plus leave/correction approvals. No payroll, rules,
  *   audit logs, or company setup.
  */
-export function getNavItems(role?: string | null): NavEntry[] {
+export function getNavItems(
+  role?: string | null,
+  features?: Record<string, boolean> | null
+): NavEntry[] {
+  let items: NavEntry[] = [];
   if (role === 'SUPER_ADMIN') {
-    return [
+    items = [
       ...baseNavItems.filter((item) => item.label === 'Overview'),
       ...superAdminNavItems,
       ...baseNavItems.filter((item) =>
@@ -112,10 +137,8 @@ export function getNavItems(role?: string | null): NavEntry[] {
         return order.indexOf(a.label) - order.indexOf(b.label);
       }),
     ];
-  }
-
-  if (role === 'ADMIN') {
-    return [
+  } else if (role === 'ADMIN') {
+    items = [
       ...baseNavItems
         .filter((item) =>
           ['Overview', 'Attendance', 'Employees', 'Groups', 'Analytics', 'Notice Board', 'Corrections', 'Leaves'].includes(
@@ -128,18 +151,28 @@ export function getNavItems(role?: string | null): NavEntry[] {
         }),
       adminDepartmentSetupNavItem,
     ];
-  }
-
-  if (role === 'MANAGER') {
-    return baseNavItems.filter((item) =>
+  } else if (role === 'MANAGER') {
+    items = baseNavItems.filter((item) =>
       ['Overview', 'Employees', 'Attendance', 'Analytics', 'Notice Board', 'Corrections', 'Leaves'].includes(
         item.label
       )
     );
+  } else {
+    items = baseNavItems.filter((item) => item.label === 'Overview');
   }
 
-  // Employees do not use the web console navigation.
-  return baseNavItems.filter((item) => item.label === 'Overview');
+  // Filter out any feature disabled for this organization
+  if (features) {
+    return items.filter((item) => {
+      const featKey = LABEL_TO_FEATURE_KEY[item.label];
+      if (featKey && features[featKey] === false) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  return items;
 }
 
 function isActivePath(pathname: string, href: string) {
@@ -162,12 +195,29 @@ function canUseEmployeePortal(role?: string | null) {
  * pages (such as /dashboard/payroll, /dashboard/audit-logs, /dashboard/settings)
  * simply by typing the URL.
  */
-export function isRouteAllowedForRole(pathname: string, role?: string | null): boolean {
+export function isRouteAllowedForRole(
+  pathname: string,
+  role?: string | null,
+  features?: Record<string, boolean> | null
+): boolean {
   if (!role) return false;
-  if (role === 'SUPER_ADMIN') return true;
-  if (role === 'EMPLOYEE') return false;
 
   const cleanPath = pathname.split('?')[0].replace(/\/+$/, '') || '/dashboard';
+
+  // Check company module restrictions first (applies to ALL roles in company including SUPER_ADMIN)
+  if (features) {
+    for (const [routePrefix, featKey] of Object.entries(PATH_TO_FEATURE_KEY)) {
+      if (
+        (cleanPath === routePrefix || cleanPath.startsWith(`${routePrefix}/`)) &&
+        features[featKey] === false
+      ) {
+        return false;
+      }
+    }
+  }
+
+  if (role === 'SUPER_ADMIN') return true;
+  if (role === 'EMPLOYEE') return false;
 
   // Routes strictly restricted to SUPER_ADMIN only
   const superAdminOnlyRoutes = [
@@ -281,6 +331,9 @@ const SidebarWaves = () => (
 interface SidebarUser {
   name?: string | null;
   role?: string | null;
+  company?: {
+    features?: Record<string, boolean>;
+  } | null;
 }
 
 interface SidebarProps {
@@ -348,7 +401,7 @@ const Sidebar = ({
             Menu
           </p>
         )}
-        {getNavItems(user?.role).map((item) => (
+        {getNavItems(user?.role, user?.company?.features).map((item) => (
           <NavItem
             key={item.href}
             href={item.href}
@@ -467,7 +520,7 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
     () => false
   );
 
-  const activeNav = getNavItems(user?.role).find((item) => isActivePath(pathname, item.href));
+  const activeNav = getNavItems(user?.role, user?.company?.features).find((item) => isActivePath(pathname, item.href));
   const sectionLabel = activeNav?.label ?? 'Overview';
 
   const toggleCollapse = () => {
@@ -480,7 +533,7 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
 
   // Redirect if not logged in once hydration is settled.
   // Also redirect employees away from admin console to their portal,
-  // and redirect unauthorized roles away from restricted dashboard pages.
+  // and redirect unauthorized roles or restricted modules away from dashboard pages.
   React.useEffect(() => {
     if (!authHydrated || !user) {
       if (authHydrated && !user) router.replace('/login');
@@ -492,7 +545,7 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
       return;
     }
 
-    if (!isRouteAllowedForRole(pathname, user.role)) {
+    if (!isRouteAllowedForRole(pathname, user.role, user?.company?.features)) {
       router.replace('/dashboard');
     }
   }, [authHydrated, user, pathname, router]);
@@ -530,9 +583,15 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
     );
   }
 
-  const routeAllowed = isRouteAllowedForRole(pathname, user.role);
+  const routeAllowed = isRouteAllowedForRole(pathname, user.role, user?.company?.features);
 
   if (!routeAllowed) {
+    const isFeatureRestricted =
+      user?.company?.features &&
+      Object.entries(PATH_TO_FEATURE_KEY).some(
+        ([prefix, featKey]) => pathname.startsWith(prefix) && user.company?.features?.[featKey] === false
+      );
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas p-4 font-sans">
         <div className="flex flex-col items-center gap-3 p-8 bg-white rounded-3xl shadow-xl border border-line max-w-sm text-center">
@@ -542,7 +601,9 @@ export default function DashboardLayout({ children, headerActions }: DashboardLa
           <div>
             <h2 className="text-lg font-black text-ink tracking-tight">Access Restricted</h2>
             <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-              Your role (<strong className="text-ink">{user.role}</strong>) does not have permission to access this page. Redirecting to your dashboard...
+              {isFeatureRestricted
+                ? 'This module has been restricted for your organization. Please contact your platform administrator. Redirecting to your dashboard…'
+                : `Your role (${user.role}) does not have permission to access this page. Redirecting to your dashboard…`}
             </p>
           </div>
         </div>

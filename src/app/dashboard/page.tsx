@@ -37,8 +37,8 @@ import {
 } from '@/components/ui/chart';
 import { io } from 'socket.io-client';
 
-// ── Status tones — used by the live activity feed (badges + avatars).
-// Green is on-track, yellow is a soft flag, red is a hard flag.
+// ── Status tones — used by the live activity feed badges.
+// Green = check-in, yellow = late, red = check-out / absent.
 const TONES = {
   blue: { bg: '#DBEAFE', chip: '#93C5FD', icon: '#1D4ED8', accent: '#2563EB', dark: '#1E3A8A' },
   green: { bg: '#DCFCE7', chip: '#86EFAC', icon: '#15803D', accent: '#16A34A', dark: '#052E16' },
@@ -46,7 +46,20 @@ const TONES = {
   red: { bg: '#FEE2E2', chip: '#FCA5A5', icon: '#B91C1C', accent: '#DC2626', dark: '#450A0A' },
 } as const;
 
-type Tone = keyof typeof TONES;
+// ── Per-user avatar colors. Each user is assigned the next free color the
+// first time they appear, so colors stay distinct until the palette runs out.
+const USER_COLORS = [
+  '#DC2626', // red
+  '#2563EB', // blue
+  '#7C3AED', // violet
+  '#EA580C', // orange
+  '#0D9488', // teal
+  '#DB2777', // pink
+  '#4F46E5', // indigo
+  '#65A30D', // lime
+  '#0891B2', // cyan
+  '#B45309', // brown
+] as const;
 
 // ── Stat card palettes — soft tinted wash, matching icon circle
 const STAT_STYLES = {
@@ -115,15 +128,21 @@ function StatCard({
   );
 }
 
-// ── Pulse status badge — green on time, yellow late, red absent/missing
+// ── Pulse status badge
+// Check-out is red, check-in is green. Late (yellow) and absent (red) keep
+// their own meaning. Check-out is tested first because "check out" would
+// otherwise match the generic check-in rule.
+const CHECK_OUT_RE = /check(ed)?[\s_-]?out|clock(ed)?[\s_-]?out/;
+const CHECK_IN_RE = /check(ed)?[\s_-]?in|clock(ed)?[\s_-]?in|present|on[\s_-]?time/;
+
 function StatusBadge({ action }: { action: string }) {
   const lower = action?.toLowerCase() || '';
   const base = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold';
 
-  if (lower.includes('late'))
+  if (CHECK_OUT_RE.test(lower))
     return (
-      <span className={base} style={{ color: TONES.yellow.icon, backgroundColor: TONES.yellow.bg }}>
-        Late
+      <span className={base} style={{ color: TONES.red.icon, backgroundColor: TONES.red.bg }}>
+        Check-out
       </span>
     );
   if (lower.includes('absent') || lower.includes('missing'))
@@ -132,10 +151,16 @@ function StatusBadge({ action }: { action: string }) {
         Absent
       </span>
     );
-  if (lower.includes('check') || lower.includes('in'))
+  if (lower.includes('late'))
+    return (
+      <span className={base} style={{ color: TONES.yellow.icon, backgroundColor: TONES.yellow.bg }}>
+        Late
+      </span>
+    );
+  if (CHECK_IN_RE.test(lower))
     return (
       <span className={base} style={{ color: TONES.green.icon, backgroundColor: TONES.green.bg }}>
-        Present
+        Check-in
       </span>
     );
   return (
@@ -143,22 +168,26 @@ function StatusBadge({ action }: { action: string }) {
   );
 }
 
-// Avatar tone follows the same status logic as the badge, not a name hash,
-// so a person's chip color always matches what happened.
-function statusTone(action: string): Tone {
-  const lower = action?.toLowerCase() || '';
-  if (lower.includes('late')) return 'yellow';
-  if (lower.includes('absent') || lower.includes('missing')) return 'red';
-  return 'green';
-}
-
 type PulseItem = {
+  userId?: string;
   name?: string;
   action: string;
   time?: string;
   color?: string;
   companyId?: string;
 };
+
+// Pure, deterministic user -> color mapping (FNV-1a hash of id/name).
+// The same user always gets the same color, with no refs or state needed.
+function getUserColor(item: PulseItem): string {
+  const key = item.userId || item.name || 'unknown';
+  let hash = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return USER_COLORS[(hash >>> 0) % USER_COLORS.length];
+}
 
 type Bucket = 'onTime' | 'late' | 'absent' | 'leave';
 
@@ -577,32 +606,29 @@ export default function DashboardOverview() {
 
             {pulse.length > 0 ? (
               <div className="divide-y divide-line">
-                {pulse.map((item, i) => {
-                  const tone = TONES[statusTone(item.action)];
-                  return (
+                {pulse.map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 px-4.5 py-2.5 transition-colors hover:bg-[#F7F9FF]"
+                  >
                     <div
-                      key={i}
-                      className="flex items-center gap-3 px-4.5 py-2.5 transition-colors hover:bg-[#F7F9FF]"
+                      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-2xs"
+                      style={{ backgroundColor: getUserColor(item) }}
                     >
-                      <div
-                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-2xs"
-                        style={{ backgroundColor: tone.accent }}
-                      >
-                        {item.name?.charAt(0)?.toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-ink">{item.name}</p>
-                        <p className="truncate text-[11px] text-ink-soft">{item.action}</p>
-                      </div>
-                      <div className="flex flex-shrink-0 items-center gap-2.5">
-                        <StatusBadge action={item.action} />
-                        <span className="w-14 text-right text-[11px] font-medium tabular-nums text-ink-faint">
-                          {item.time}
-                        </span>
-                      </div>
+                      {item.name?.charAt(0)?.toUpperCase()}
                     </div>
-                  );
-                })}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-ink">{item.name}</p>
+                      <p className="truncate text-[11px] text-ink-soft">{item.action}</p>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2.5">
+                      <StatusBadge action={item.action} />
+                      <span className="w-14 text-right text-[11px] font-medium tabular-nums text-ink-faint">
+                        {item.time}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <EmptyActivity />

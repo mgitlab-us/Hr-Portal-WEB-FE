@@ -30,6 +30,7 @@ interface User {
     name: string;
     timezone: string;
     logo?: string | null;
+    features?: Record<string, boolean>;
   };
   mustChangePassword?: boolean;
 }

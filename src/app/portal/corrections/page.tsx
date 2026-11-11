@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { APP_TIMEZONE, formatTime12hInZone, zonedWallTimeToIso } from '@/lib/tz';
 import {
   FileCheck,
   Plus,
@@ -15,20 +16,22 @@ import {
   X,
 } from 'lucide-react';
 
+interface AttendanceDate {
+  date: string;
+  checkinTime?: string | null;
+  checkoutTime?: string | null;
+}
+
 interface CorrectionRequest {
   id: string;
-  recordId: string;
+  attendanceRecordId?: string;
   requestedCheckin?: string | null;
   requestedCheckout?: string | null;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   reviewNote?: string | null;
   createdAt: string;
-  record?: {
-    date: string;
-    checkinTime?: string | null;
-    checkoutTime?: string | null;
-  };
+  attendanceRecord?: AttendanceDate;
 }
 
 interface AttendanceOption {
@@ -38,21 +41,38 @@ interface AttendanceOption {
   checkoutTime?: string | null;
 }
 
+/** Instant -> "09:00 AM" in Pakistan time. */
 function formatTime(isoString?: string | null) {
   if (!isoString) return '--:--';
-  const d = new Date(isoString);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  return formatTime12hInZone(isoString);
 }
 
-function formatDate(dateStr?: string | null) {
+/** Date-only value stored at 00:00Z -> "Tue, Nov 11, 2026". Formatted in UTC so it never shifts a day. */
+function formatDateOnly(dateStr?: string | null) {
   if (!dateStr) return 'N/A';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString([], {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  });
+  }).format(new Date(dateStr));
+}
+
+/** Instant -> calendar date in Pakistan time (fallback when no attendance date exists). */
+function formatInstantDate(isoString: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: APP_TIMEZONE,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(isoString));
+}
+
+/** "YYYY-MM-DD" part of a date-only value. */
+function dateOnlyKey(dateStr: string) {
+  return new Date(dateStr).toISOString().slice(0, 10);
 }
 
 function extractErrorMessage(err: unknown, defaultMsg: string): string {
@@ -85,11 +105,10 @@ function CorrectionsContent() {
     if (prefillRecordId) return prefillRecordId;
 
     if (prefillDate && recentRecords.length) {
-      const sameDateRecord = recentRecords.find((record) => {
-        if (!record.date) return false;
-        return new Date(record.date).toISOString().slice(0, 10) === new Date(prefillDate).toISOString().slice(0, 10);
-      });
-
+      const targetKey = dateOnlyKey(prefillDate);
+      const sameDateRecord = recentRecords.find(
+        (record) => record.date && dateOnlyKey(record.date) === targetKey
+      );
       return sameDateRecord?.id ?? '';
     }
 
@@ -130,6 +149,10 @@ function CorrectionsContent() {
       setErrorMsg('Please select an attendance record to correct.');
       return;
     }
+    if (!selectedRecord?.date) {
+      setErrorMsg('Selected attendance record has no date. Please reselect it.');
+      return;
+    }
     if (reason.trim().length < 5) {
       setErrorMsg('Reason must be at least 5 characters long.');
       return;
@@ -137,17 +160,21 @@ function CorrectionsContent() {
 
     setSubmitting(true);
     try {
-      const recordDate = selectedRecord?.date
-        ? new Date(selectedRecord.date).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+      // Calendar date of the attendance record (date-only value stored at 00:00Z).
+      const recordDate = dateOnlyKey(selectedRecord.date);
 
+      // Convert the user's Pakistan wall-clock time to an exact UTC instant.
       const checkinIso = requestedInTime
-        ? new Date(`${recordDate}T${requestedInTime}:00Z`).toISOString()
+        ? zonedWallTimeToIso(recordDate, requestedInTime)
+        : undefined;
+      const checkoutIso = requestedOutTime
+        ? zonedWallTimeToIso(recordDate, requestedOutTime)
         : undefined;
 
-      const checkoutIso = requestedOutTime
-        ? new Date(`${recordDate}T${requestedOutTime}:00Z`).toISOString()
-        : undefined;
+      if (checkinIso && checkoutIso && new Date(checkoutIso) <= new Date(checkinIso)) {
+        setErrorMsg('Check-out time must be after check-in time.');
+        return;
+      }
 
       await api.post('/corrections/request', {
         recordId: effectiveSelectedRecordId,
@@ -170,7 +197,7 @@ function CorrectionsContent() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      
+
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -238,15 +265,18 @@ function CorrectionsContent() {
         ) : (
           <div className="divide-y divide-slate-100">
             {corrections.map((item) => {
-              const reqDate = item.record?.date || item.createdAt;
+              const attendanceDate = item.attendanceRecord?.date;
+              const dateLabel = attendanceDate
+                ? formatDateOnly(attendanceDate)
+                : formatInstantDate(item.createdAt);
 
               return (
                 <div key={item.id} className="p-5 hover:bg-slate-50/80 transition flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  
+
                   {/* Left: Date & Status */}
                   <div className="space-y-1 min-w-[200px]">
                     <div className="font-bold text-slate-900 text-sm">
-                      {formatDate(reqDate)}
+                      {dateLabel}
                     </div>
                     <div className="flex items-center gap-2">
                       <span
@@ -303,7 +333,7 @@ function CorrectionsContent() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
-            
+
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900">Request Attendance Correction</h2>
               <button
@@ -315,7 +345,7 @@ function CorrectionsContent() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-              
+
               {/* Select Attendance Date / Record */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -330,7 +360,7 @@ function CorrectionsContent() {
                   <option value="">-- Choose an attendance day --</option>
                   {recentRecords.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {formatDate(r.date)} (Current In: {formatTime(r.checkinTime)} | Out: {formatTime(r.checkoutTime)})
+                      {formatDateOnly(r.date)} (Current In: {formatTime(r.checkinTime)} | Out: {formatTime(r.checkoutTime)})
                     </option>
                   ))}
                 </select>
