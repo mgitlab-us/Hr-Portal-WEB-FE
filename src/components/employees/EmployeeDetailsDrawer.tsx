@@ -101,6 +101,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
   const [showLedgerDrawer, setShowLedgerDrawer] = useState(false);
 
   const [editInfo, setEditInfo] = useState({
+    name: '',
     baseSalary: '',
     bankName: '',
     accountNumber: '',
@@ -131,6 +132,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
 
       const p = empRes.data.profile;
       setEditInfo({
+        name: empRes.data.name || '',
         baseSalary: p?.baseSalary !== undefined && p?.baseSalary !== null ? String(p.baseSalary) : '',
         bankName: p?.bankName || '',
         accountNumber: p?.accountNumber || '',
@@ -178,6 +180,7 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
     if (employee) {
       const p = employee.profile;
       setEditInfo({
+        name: employee.name,
         baseSalary: p?.baseSalary !== undefined && p?.baseSalary !== null ? String(p.baseSalary) : '',
         bankName: p?.bankName || '',
         accountNumber: p?.accountNumber || '',
@@ -205,6 +208,11 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
         bankName: editInfo.bankName.trim() || undefined,
         accountNumber: editInfo.accountNumber.trim() || undefined
       };
+
+      const trimmedName = editInfo.name.trim();
+      if (trimmedName && trimmedName !== employee?.name) {
+        payload.name = trimmedName;
+      }
 
       if (isSuperAdmin) {
         payload.shiftProfileId = editInfo.shiftProfileId || null;
@@ -253,8 +261,9 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
       await fetchData();
       setIsEditing(false);
       toast.success('Employee information updated.');
-    } catch {
-      toast.error('Failed to update employee information.');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message || 'Failed to update employee information.');
     } finally {
       setSaving(false);
     }
@@ -610,6 +619,20 @@ export default function EmployeeDetailsDrawer({ employeeId, canManage, onClose, 
                           <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
                             <Briefcase size={13} className="text-blue-600" />
                             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-tight">Job & Organization</h4>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Full Name</label>
+                            <input
+                              type="text"
+                              value={editInfo.name}
+                              onChange={e => setEditInfo(p => ({ ...p, name: e.target.value }))}
+                              placeholder="Employee full name"
+                              maxLength={100}
+                              required
+                              disabled={saving}
+                              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-400 transition-all outline-none"
+                            />
                           </div>
 
                           <div className="space-y-1.5">

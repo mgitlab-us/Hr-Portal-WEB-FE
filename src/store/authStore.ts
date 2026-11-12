@@ -23,6 +23,7 @@ interface User {
   department?: string | null;
   employeeCode?: string | null;
   designation?: string | null;
+  phone?: string | null;
   adminDepartmentIds?: string[];
   managerDepartmentIds?: string[];
   permissions?: UserPermissions;

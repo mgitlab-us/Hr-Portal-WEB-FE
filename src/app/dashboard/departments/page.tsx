@@ -13,6 +13,8 @@ import DepartmentAssignEmployeesModal from '@/components/departments/DepartmentA
 import { useToast } from '@/components/ui/toast';
 import { useRouter } from 'next/navigation';
 
+const EMPLOYEES_PATH = '/dashboard/employees';
+
 interface PersonOption {
   id: string;
   name: string;
@@ -133,6 +135,17 @@ export default function DepartmentsPage() {
       managerIds: dept.managers?.map((manager) => manager.id) || [],
     });
     setModal({ mode: 'edit', dept });
+  };
+
+  /**
+   * Open the employees page filtered to one department. Departments the user
+   * does not manage are only visible in the read-only Company Directory scope,
+   * so those links switch to it.
+   */
+  const handleSelectDepartment = (dept: Department) => {
+    const params = new URLSearchParams({ departmentId: dept.id });
+    if (!canAssignDepartment(dept)) params.set('scope', 'company');
+    router.push(`${EMPLOYEES_PATH}?${params.toString()}`);
   };
 
   const toggleId = (field: 'adminIds' | 'managerIds', id: string) => {
@@ -286,6 +299,7 @@ export default function DepartmentsPage() {
               onEditDepartment={openEdit}
               onDeleteDepartment={setDeleteTarget}
               onAssignEmployees={setAssignTarget}
+              onSelectDepartment={handleSelectDepartment}
             />
           ) : (
             <div className="overflow-x-auto">
@@ -309,7 +323,21 @@ export default function DepartmentsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {departments.map((dept) => (
-                    <tr key={dept.id} className="hover:bg-slate-50/60 transition-colors">
+                    <tr
+                      key={dept.id}
+                      onClick={() => handleSelectDepartment(dept)}
+                      onKeyDown={(e) => {
+                        // Ignore key presses that originate from the action buttons.
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSelectDepartment(dept);
+                        }
+                      }}
+                      tabIndex={0}
+                      aria-label={`View employees in ${dept.name}`}
+                      className="cursor-pointer hover:bg-slate-50/60 transition-colors focus-visible:outline-none focus-visible:bg-slate-50"
+                    >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -369,7 +397,10 @@ export default function DepartmentsPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td
+                        className="px-5 py-3.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {(canEditDepartments || canAssignDepartment(dept)) && (
                           <div className="flex items-center justify-end gap-1">
                             {canAssignDepartment(dept) && (

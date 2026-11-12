@@ -47,7 +47,7 @@ export default function ProfileSecurityModal({ isOpen, onClose }: Props) {
 
   const [tab, setTab] = useState<Tab>('profile');
   const [profileForm, setProfileForm] = useState(() => (
-    user ? { name: user.name || '', phone: (user as { phone?: string }).phone || '' } : { name: '', phone: '' }
+    user ? { name: user.name || '', phone: user.phone || '' } : { name: '', phone: '' }
   ));
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
@@ -58,7 +58,11 @@ export default function ProfileSecurityModal({ isOpen, onClose }: Props) {
     setProfileMsg(null);
     try {
       const res = await api.patch('/employees/me/profile', profileForm);
-      setUser({ ...user!, name: res.data?.name ?? profileForm.name });
+      setUser({
+        ...user!,
+        name: res.data?.name ?? profileForm.name,
+        phone: res.data?.phone ?? profileForm.phone,
+      });
       setProfileMsg({ ok: true, text: 'Profile updated successfully.' });
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -81,8 +85,8 @@ export default function ProfileSecurityModal({ isOpen, onClose }: Props) {
     setPwSaving(true);
     setPwMsg(null);
     try {
-      await api.patch('/employees/me/password', {
-        currentPassword: pwForm.currentPassword,
+      await api.post('/auth/change-password', {
+        oldPassword: pwForm.currentPassword,
         newPassword: pwForm.newPassword,
       });
       setPwMsg({ ok: true, text: 'Password changed successfully.' });

@@ -15,6 +15,7 @@ import {
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import HeaderActions, { type NotificationItem } from '@/components/layout/HeaderActions';
 import { api } from '@/lib/api';
+import { passwordFormatError } from '@/lib/password';
 import { useAuthStore } from '@/store/authStore';
 
 const NOTIFICATIONS_KEY = 'tapin_notifications';
@@ -22,9 +23,10 @@ const NOTIFICATIONS_KEY = 'tapin_notifications';
 export default function ProfilePage() {
   const { user, setUser } = useAuthStore();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [profileForm, setProfileForm] = useState({ name: user?.name || '', phone: '' });
+  const [profileForm, setProfileForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -51,7 +53,11 @@ export default function ProfilePage() {
     if (!user) return;
     // Keep the form in sync when the persisted auth user hydrates or changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProfileForm((prev) => ({ ...prev, name: user.name || prev.name }));
+    setProfileForm((prev) => ({
+      ...prev,
+      name: user.name || prev.name,
+      phone: user.phone ?? prev.phone,
+    }));
   }, [user]);
 
   const saveNotifications = (next: NotificationItem[]) => {
@@ -76,7 +82,9 @@ export default function ProfilePage() {
       });
 
       const nextName = response.data?.name ?? profileForm.name;
-      setUser({ ...user!, name: nextName });
+      const nextPhone = response.data?.phone ?? profileForm.phone;
+      setUser({ ...user!, name: nextName, phone: nextPhone });
+      setProfileForm({ name: nextName, phone: nextPhone || '' });
       setProfileMessage({ ok: true, text: 'Profile updated successfully.' });
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };
@@ -92,13 +100,14 @@ export default function ProfilePage() {
   const handlePasswordSave = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordMessage({ ok: false, text: 'New passwords do not match.' });
+    const formatError = passwordFormatError(passwordForm.newPassword);
+    if (formatError) {
+      setPasswordMessage({ ok: false, text: formatError });
       return;
     }
 
-    if (passwordForm.newPassword.length < 6) {
-      setPasswordMessage({ ok: false, text: 'Password must be at least 6 characters long.' });
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordMessage({ ok: false, text: 'New passwords do not match.' });
       return;
     }
 
@@ -113,10 +122,20 @@ export default function ProfilePage() {
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setPasswordMessage({ ok: true, text: 'Password changed successfully.' });
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
+      const err = error as {
+        response?: {
+          data?: { message?: string; details?: { message?: string }[] };
+        };
+      };
+      const details = (err?.response?.data?.details ?? [])
+        .map((issue) => issue.message)
+        .filter((message): message is string => Boolean(message));
       setPasswordMessage({
         ok: false,
-        text: err?.response?.data?.message || 'Failed to change password.',
+        text:
+          details.length > 0
+            ? details.join(' ')
+            : err?.response?.data?.message || 'Failed to change password.',
       });
     } finally {
       setPasswordSaving(false);
@@ -290,7 +309,7 @@ export default function ProfilePage() {
                           type={showNewPassword ? 'text' : 'password'}
                           value={passwordForm.newPassword}
                           onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))}
-                          placeholder="Minimum 6 characters"
+                          placeholder="8+ chars, upper, lower, number"
                           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                         />
                         <button
@@ -307,13 +326,26 @@ export default function ProfilePage() {
 
                   <label className="block space-y-2 text-sm font-medium text-ink">
                     <span>Confirm new password</span>
-                    <input
-                      type="password"
-                      value={passwordForm.confirmPassword}
-                      onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
-                      placeholder="Re-enter your new password"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={passwordForm.confirmPassword}
+                        onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+                        placeholder="Re-enter your new password"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((current) => !current)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                        aria-label="Toggle confirm password visibility"
+                      >
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    <span className="block text-[11px] font-normal text-ink-soft">
+                      Use 8+ characters with an uppercase letter, a lowercase letter, and a number.
+                    </span>
                   </label>
 
                   {passwordMessage && (

@@ -101,6 +101,11 @@ function CorrectionCard({
     req.approvalStage === 'HR' &&
     (req.employee.role === 'ADMIN' || req.employee.role === 'MANAGER');
 
+  // Single-field corrections omit the untouched time; show the stored value
+  // that will remain in place so approvers see the full effective result.
+  const requestedCheckin = req.requestedCheckin ?? req.originalCheckin;
+  const requestedCheckout = req.requestedCheckout ?? req.originalCheckout;
+
   return (
     <div className="bg-white border border-slate-100 rounded-xl overflow-hidden hover:shadow-md hover:border-slate-200 transition-all duration-200">
       <div className="p-4 sm:p-5 flex flex-col gap-4">
@@ -151,8 +156,8 @@ function CorrectionCard({
 
           <TimeBlock
             label="Requested"
-            checkin={req.requestedCheckin}
-            checkout={req.requestedCheckout}
+            checkin={requestedCheckin}
+            checkout={requestedCheckout}
             variant="requested"
           />
 
@@ -236,7 +241,7 @@ export default function CorrectionsPage() {
   const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     setProcessingId(id);
     try {
-      await api.put(`/corrections/${id}/review`, { status });
+      await api.patch(`/corrections/${id}/review`, { status });
       await fetchRequests();
       toast.success(
         status === 'APPROVED' && queue === 'MANAGER'
