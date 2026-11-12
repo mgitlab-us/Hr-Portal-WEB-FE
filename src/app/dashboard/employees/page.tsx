@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
 import { Users, UserPlus, Search, X, Mail, ShieldAlert, Loader2, CheckCircle2, XCircle, ChevronDown, FileText, MoreVertical, Trash2, Power, DollarSign, Building2, UserX } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -143,13 +144,18 @@ function Field({
   );
 }
 
-export default function EmployeesPage() {
+function EmployeesPageContent() {
   const { toast } = useToast();
   const { user } = useAuthStore();
+  const searchParams = useSearchParams();
+  // Deep-link support: /dashboard/employees?departmentId=<id>[&scope=company]
+  const initialDepartmentId = searchParams.get('departmentId') ?? '';
+  const initialScope: 'team' | 'company' =
+    searchParams.get('scope') === 'company' ? 'company' : 'team';
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState(initialDepartmentId);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'EMPLOYEE' | 'MANAGER' | 'ADMIN'>('ALL');
   const [showUnassignedOnly, setShowUnassignedOnly] = useState(false);
@@ -191,7 +197,7 @@ export default function EmployeesPage() {
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [bulkDepartmentId, setBulkDepartmentId] = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
-  const [scope, setScope] = useState<'team' | 'company'>('team');
+  const [scope, setScope] = useState<'team' | 'company'>(initialScope);
   const employeeRequestId = useRef(0);
   const pageSize = 20;
   const isCompanyScope = scope === 'company';
@@ -423,6 +429,15 @@ export default function EmployeesPage() {
   }, [filteredEmployees]);
 
   const showScopeTabs = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+
+  // The Company Directory scope has no tab (and no meaning) for other roles, so
+  // a hand-edited ?scope=company link falls back to the normal view for them.
+  useEffect(() => {
+    if (user && scope === 'company' && !showScopeTabs) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setScope('team');
+    }
+  }, [user, scope, showScopeTabs]);
 
   const selectedEmployees = useMemo(
     () => employees.filter((employee) => selectedIds.has(employee.id)),
@@ -1585,5 +1600,14 @@ export default function EmployeesPage() {
         )}
       </AnimatePresence>
     </DashboardLayout>
+  );
+}
+
+// useSearchParams() must sit under a Suspense boundary for production builds.
+export default function EmployeesPage() {
+  return (
+    <Suspense fallback={null}>
+      <EmployeesPageContent />
+    </Suspense>
   );
 }

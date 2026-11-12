@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, Suspense, useMemo } from 'reac
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { APP_TIMEZONE, formatTime12hInZone, zonedWallTimeToIso } from '@/lib/tz';
+import { useAuthStore } from '@/store/authStore';
 import {
   FileCheck,
   Plus,
@@ -12,6 +13,7 @@ import {
   XCircle,
   AlertCircle,
   ArrowRight,
+  ChevronRight,
   Loader2,
   X,
 } from 'lucide-react';
@@ -25,6 +27,8 @@ interface AttendanceDate {
 interface CorrectionRequest {
   id: string;
   attendanceRecordId?: string;
+  originalCheckin?: string | null;
+  originalCheckout?: string | null;
   requestedCheckin?: string | null;
   requestedCheckout?: string | null;
   reason: string;
@@ -41,10 +45,36 @@ interface AttendanceOption {
   checkoutTime?: string | null;
 }
 
-/** Instant -> "09:00 AM" in Pakistan time. */
-function formatTime(isoString?: string | null) {
+/** Instant -> "09:00 AM" in the company timezone. */
+function formatTime(isoString?: string | null, timeZone: string = APP_TIMEZONE) {
   if (!isoString) return '--:--';
-  return formatTime12hInZone(isoString);
+  return formatTime12hInZone(isoString, timeZone);
+}
+
+/** Instant -> "HH:mm" for a native time input in the company timezone. */
+function toTimeInputValue(value?: string | null, timeZone: string = APP_TIMEZONE) {
+  if (!value) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(value));
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+}
+
+/** "YYYY-MM-DD" calendar key in the company timezone. */
+function dateKeyInZone(now: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
 /** Date-only value stored at 00:00Z -> "Tue, Nov 11, 2026". Formatted in UTC so it never shifts a day. */
@@ -80,22 +110,95 @@ function extractErrorMessage(err: unknown, defaultMsg: string): string {
   return errorObj?.response?.data?.message || errorObj?.message || defaultMsg;
 }
 
+function TimeComparison({
+  label,
+  checkin,
+  checkout,
+  timeZone,
+  variant,
+}: {
+  label: string;
+  checkin?: string | null;
+  checkout?: string | null;
+  timeZone: string;
+  variant: 'current' | 'requested';
+}) {
+  const isRequested = variant === 'requested';
+  return (
+    <div
+      className={`rounded-xl border px-3 py-2 ${
+        isRequested ? 'border-blue-100 bg-blue-50' : 'border-slate-100 bg-white'
+      }`}
+    >
+      <p
+        className={`mb-1.5 text-[9px] font-bold uppercase tracking-widest ${
+          isRequested ? 'text-blue-400' : 'text-slate-400'
+        }`}
+      >
+        {label}
+      </p>
+      <div className="flex items-center gap-2">
+        <div>
+          <p
+            className={`text-[8px] font-semibold uppercase ${
+              isRequested ? 'text-blue-300' : 'text-slate-400'
+            }`}
+          >
+            In
+          </p>
+          <p
+            className={`whitespace-nowrap text-xs font-bold tabular-nums ${
+              isRequested ? 'text-blue-700' : 'text-slate-600'
+            }`}
+          >
+            {formatTime(checkin, timeZone)}
+          </p>
+        </div>
+        <ChevronRight
+          size={10}
+          className={isRequested ? 'text-blue-200' : 'text-slate-300'}
+        />
+        <div>
+          <p
+            className={`text-[8px] font-semibold uppercase ${
+              isRequested ? 'text-blue-300' : 'text-slate-400'
+            }`}
+          >
+            Out
+          </p>
+          <p
+            className={`whitespace-nowrap text-xs font-bold tabular-nums ${
+              isRequested ? 'text-blue-700' : 'text-slate-600'
+            }`}
+          >
+            {formatTime(checkout, timeZone)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CorrectionsContent() {
   const searchParams = useSearchParams();
   const prefillRecordId = searchParams.get('recordId') || '';
   const prefillDate = searchParams.get('date') || '';
+  const { user } = useAuthStore();
+  const companyTz = user?.company?.timezone || APP_TIMEZONE;
 
   const [corrections, setCorrections] = useState<CorrectionRequest[]>([]);
   const [recentRecords, setRecentRecords] = useState<AttendanceOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Form states
+  // Form states. Times start empty and are filled from the selected attendance
+  // record as soon as the history loads.
   const [selectedRecordId, setSelectedRecordId] = useState(prefillRecordId);
-  const [requestedInTime, setRequestedInTime] = useState('09:00');
-  const [requestedOutTime, setRequestedOutTime] = useState('18:00');
+  const [requestedInTime, setRequestedInTime] = useState('');
+  const [requestedOutTime, setRequestedOutTime] = useState('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [modalError, setModalError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [showModal, setShowModal] = useState(() => Boolean(prefillRecordId));
 
@@ -140,21 +243,95 @@ function CorrectionsContent() {
 
   const selectedRecord = recentRecords.find((r) => r.id === effectiveSelectedRecordId);
 
+  /**
+   * Default the form to the current day's record (or the latest record when
+   * today has none) and copy that record's actual times into the proposed
+   * fields. Runs once the history is available or when URL prefill params change.
+   */
+  useEffect(() => {
+    if (selectedRecordId || recentRecords.length === 0) return;
+
+    const todayKey = dateKeyInZone(new Date(), companyTz);
+    const preferred =
+      recentRecords.find((record) => record.id === prefillRecordId) ??
+      (prefillDate
+        ? recentRecords.find(
+            (record) => record.date && dateOnlyKey(record.date) === dateOnlyKey(prefillDate)
+          )
+        : undefined) ??
+      recentRecords.find(
+        (record) => record.date && dateOnlyKey(record.date) === todayKey
+      ) ??
+      recentRecords[0];
+
+    if (!preferred) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setSelectedRecordId(preferred.id);
+    setRequestedInTime(toTimeInputValue(preferred.checkinTime, companyTz));
+    setRequestedOutTime(toTimeInputValue(preferred.checkoutTime, companyTz));
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [companyTz, prefillDate, prefillRecordId, recentRecords, selectedRecordId]);
+
+  const originalInTime = toTimeInputValue(selectedRecord?.checkinTime, companyTz);
+  const originalOutTime = toTimeInputValue(selectedRecord?.checkoutTime, companyTz);
+  const checkinChanged =
+    Boolean(selectedRecord) && requestedInTime !== '' && requestedInTime !== originalInTime;
+  const checkoutChanged =
+    Boolean(selectedRecord) && requestedOutTime !== '' && requestedOutTime !== originalOutTime;
+  const hasChanges = checkinChanged || checkoutChanged;
+
+  const applyRecord = (record?: AttendanceOption) => {
+    setSelectedRecordId(record?.id ?? '');
+    setRequestedInTime(toTimeInputValue(record?.checkinTime, companyTz));
+    setRequestedOutTime(toTimeInputValue(record?.checkoutTime, companyTz));
+    setModalError('');
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setModalError('');
+  };
+
+  const openModal = () => {
+    setErrorMsg('');
+    setModalError('');
+    setShowModal(true);
+
+    if (recentRecords.length === 0) return;
+    const todayKey = dateKeyInZone(new Date(), companyTz);
+    const preferred =
+      recentRecords.find((record) => record.date && dateOnlyKey(record.date) === todayKey) ??
+      recentRecords[0];
+    applyRecord(preferred);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    setModalError('');
     setSuccessMsg('');
 
     if (!effectiveSelectedRecordId) {
-      setErrorMsg('Please select an attendance record to correct.');
+      setModalError('Please select an attendance record to correct.');
       return;
     }
     if (!selectedRecord?.date) {
-      setErrorMsg('Selected attendance record has no date. Please reselect it.');
+      setModalError('Selected attendance record has no date. Please reselect it.');
       return;
     }
     if (reason.trim().length < 5) {
-      setErrorMsg('Reason must be at least 5 characters long.');
+      setModalError('Reason must be at least 5 characters long.');
+      return;
+    }
+
+    // Only send the fields the employee actually changed. The approval step
+    // keeps the stored value for any field that is omitted.
+    const originalIn = toTimeInputValue(selectedRecord.checkinTime, companyTz);
+    const originalOut = toTimeInputValue(selectedRecord.checkoutTime, companyTz);
+    const correctIn = requestedInTime !== '' && requestedInTime !== originalIn;
+    const correctOut = requestedOutTime !== '' && requestedOutTime !== originalOut;
+
+    if (!correctIn && !correctOut) {
+      setModalError('Change the check-in time, the check-out time, or both before submitting.');
       return;
     }
 
@@ -163,33 +340,40 @@ function CorrectionsContent() {
       // Calendar date of the attendance record (date-only value stored at 00:00Z).
       const recordDate = dateOnlyKey(selectedRecord.date);
 
-      // Convert the user's Pakistan wall-clock time to an exact UTC instant.
-      const checkinIso = requestedInTime
-        ? zonedWallTimeToIso(recordDate, requestedInTime)
+      // Convert the company wall-clock time to an exact UTC instant.
+      const checkinIso = correctIn
+        ? zonedWallTimeToIso(recordDate, requestedInTime, companyTz)
         : undefined;
-      const checkoutIso = requestedOutTime
-        ? zonedWallTimeToIso(recordDate, requestedOutTime)
+      const checkoutIso = correctOut
+        ? zonedWallTimeToIso(recordDate, requestedOutTime, companyTz)
         : undefined;
 
-      if (checkinIso && checkoutIso && new Date(checkoutIso) <= new Date(checkinIso)) {
-        setErrorMsg('Check-out time must be after check-in time.');
+      // Compare the effective pair, including the field that is left unchanged.
+      const effectiveCheckin = checkinIso ?? selectedRecord.checkinTime ?? null;
+      const effectiveCheckout = checkoutIso ?? selectedRecord.checkoutTime ?? null;
+      if (
+        effectiveCheckin &&
+        effectiveCheckout &&
+        new Date(effectiveCheckout) <= new Date(effectiveCheckin)
+      ) {
+        setModalError('Check-out time must be after check-in time.');
         return;
       }
 
       await api.post('/corrections/request', {
         recordId: effectiveSelectedRecordId,
-        requestedCheckin: checkinIso,
-        requestedCheckout: checkoutIso,
+        ...(checkinIso ? { requestedCheckin: checkinIso } : {}),
+        ...(checkoutIso ? { requestedCheckout: checkoutIso } : {}),
         reason: reason.trim(),
       });
 
       setSuccessMsg('Correction request submitted successfully!');
-      setShowModal(false);
+      closeModal();
       setReason('');
       await loadData();
     } catch (err: unknown) {
       console.error('Submit correction error:', err);
-      setErrorMsg(extractErrorMessage(err, 'Failed to submit correction request.'));
+      setModalError(extractErrorMessage(err, 'Failed to submit correction request.'));
     } finally {
       setSubmitting(false);
     }
@@ -211,10 +395,7 @@ function CorrectionsContent() {
         </div>
 
         <button
-          onClick={() => {
-            setErrorMsg('');
-            setShowModal(true);
-          }}
+          onClick={openModal}
           className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition shadow-sm shadow-blue-600/20"
         >
           <Plus size={18} />
@@ -270,6 +451,13 @@ function CorrectionsContent() {
                 ? formatDateOnly(attendanceDate)
                 : formatInstantDate(item.createdAt);
 
+              // A single-field correction omits the untouched time, so fall back
+              // to the original value to show the full effective result.
+              const originalIn = item.originalCheckin ?? null;
+              const originalOut = item.originalCheckout ?? null;
+              const requestedIn = item.requestedCheckin ?? originalIn;
+              const requestedOut = item.requestedCheckout ?? originalOut;
+
               return (
                 <div key={item.id} className="p-5 hover:bg-slate-50/80 transition flex flex-col md:flex-row md:items-center justify-between gap-4">
 
@@ -299,19 +487,23 @@ function CorrectionsContent() {
                     </p>
                   </div>
 
-                  {/* Middle: Proposed Times */}
-                  <div className="flex items-center gap-6 text-xs sm:text-sm bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Proposed In</span>
-                      <span className="font-bold text-slate-800">{formatTime(item.requestedCheckin)}</span>
-                    </div>
-
-                    <ArrowRight size={16} className="text-slate-300" />
-
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Proposed Out</span>
-                      <span className="font-bold text-slate-800">{formatTime(item.requestedCheckout)}</span>
-                    </div>
+                  {/* Middle: Original vs Requested */}
+                  <div className="flex items-center gap-2">
+                    <TimeComparison
+                      label="Current"
+                      checkin={originalIn}
+                      checkout={originalOut}
+                      timeZone={companyTz}
+                      variant="current"
+                    />
+                    <ArrowRight size={14} className="text-slate-300 flex-shrink-0" />
+                    <TimeComparison
+                      label="Requested"
+                      checkin={requestedIn}
+                      checkout={requestedOut}
+                      timeZone={companyTz}
+                      variant="requested"
+                    />
                   </div>
 
                   {/* Right: Review Notes if any */}
@@ -337,7 +529,7 @@ function CorrectionsContent() {
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900">Request Attendance Correction</h2>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={closeModal}
                 className="p-1 rounded-lg text-slate-400 hover:bg-slate-100"
               >
                 <X size={20} />
@@ -346,54 +538,114 @@ function CorrectionsContent() {
 
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
 
-              {/* Select Attendance Date / Record */}
+              {/* Attendance date */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Select Attendance Date
+                  Attendance Date
                 </label>
                 <select
                   required
                   value={effectiveSelectedRecordId}
-                  onChange={(e) => setSelectedRecordId(e.target.value)}
+                  onChange={(e) => {
+                    const record = recentRecords.find((r) => r.id === e.target.value);
+                    applyRecord(record);
+                  }}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                 >
                   <option value="">-- Choose an attendance day --</option>
                   {recentRecords.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {formatDateOnly(r.date)} (Current In: {formatTime(r.checkinTime)} | Out: {formatTime(r.checkoutTime)})
+                      {formatDateOnly(r.date)} (Current In: {formatTime(r.checkinTime, companyTz)} | Out: {formatTime(r.checkoutTime, companyTz)})
                     </option>
                   ))}
                 </select>
+                {recentRecords.length === 0 && (
+                  <p className="mt-1.5 text-[11px] font-medium text-amber-600">
+                    No attendance records found. Check in first so there is a record to correct.
+                  </p>
+                )}
               </div>
 
-              {/* Proposed Check-in & Check-out times */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Correct Check-in
-                  </label>
+              {/* Original times vs the proposed correction */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                    <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                      Check-in
+                    </label>
+                    <span className="text-[10px] font-medium text-slate-400">
+                      Original:{' '}
+                      <span className="font-bold text-slate-600 tabular-nums">
+                        {formatTime(selectedRecord?.checkinTime, companyTz)}
+                      </span>
+                    </span>
+                  </div>
                   <input
                     type="time"
-                    required
+                    step={60}
                     value={requestedInTime}
-                    onChange={(e) => setRequestedInTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+                    onChange={(e) => {
+                      setRequestedInTime(e.target.value);
+                      setModalError('');
+                    }}
+                    aria-label="Proposed check-in time"
+                    className="mt-2 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
                   />
+                  <p
+                    className={`mt-1 text-[10px] font-semibold ${
+                      checkinChanged ? 'text-blue-600' : 'text-slate-400'
+                    }`}
+                  >
+                    {checkinChanged
+                      ? 'Will be corrected'
+                      : originalInTime
+                      ? 'Same as original'
+                      : 'No check-in recorded'}
+                  </p>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Correct Check-out
-                  </label>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                    <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                      Check-out
+                    </label>
+                    <span className="text-[10px] font-medium text-slate-400">
+                      Original:{' '}
+                      <span className="font-bold text-slate-600 tabular-nums">
+                        {formatTime(selectedRecord?.checkoutTime, companyTz)}
+                      </span>
+                    </span>
+                  </div>
                   <input
                     type="time"
-                    required
+                    step={60}
                     value={requestedOutTime}
-                    onChange={(e) => setRequestedOutTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+                    onChange={(e) => {
+                      setRequestedOutTime(e.target.value);
+                      setModalError('');
+                    }}
+                    aria-label="Proposed check-out time"
+                    className="mt-2 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
                   />
+                  <p
+                    className={`mt-1 text-[10px] font-semibold ${
+                      checkoutChanged ? 'text-blue-600' : 'text-slate-400'
+                    }`}
+                  >
+                    {checkoutChanged
+                      ? 'Will be corrected'
+                      : originalOutTime
+                      ? 'Same as original'
+                      : 'No check-out recorded'}
+                  </p>
                 </div>
               </div>
+
+              {selectedRecord && !hasChanges && (
+                <p className="text-[11px] font-medium text-amber-600">
+                  Change the check-in or check-out time to submit a correction.
+                </p>
+              )}
 
               {/* Reason */}
               <div>
@@ -404,24 +656,43 @@ function CorrectionsContent() {
                   rows={3}
                   required
                   value={reason}
-                  onChange={(e) => setReason(e.target.value)}
+                  onChange={(e) => {
+                    setReason(e.target.value);
+                    setModalError('');
+                  }}
                   placeholder="e.g. Device was out of battery when leaving the office..."
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
 
+              {modalError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex items-start justify-between gap-3 text-xs text-red-800">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                    <span>{modalError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModalError('')}
+                    className="text-[11px] font-bold text-red-600"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
               {/* Buttons */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={closeModal}
                   className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || !selectedRecord || !hasChanges}
                   className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm disabled:opacity-50 flex items-center gap-2"
                 >
                   {submitting && <Loader2 size={14} className="animate-spin" />}

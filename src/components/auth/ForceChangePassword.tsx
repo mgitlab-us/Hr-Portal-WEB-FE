@@ -2,23 +2,39 @@
 
 import React, { useState } from 'react';
 import { api } from '@/lib/api';
+import { evaluatePassword, passwordFormatError } from '@/lib/password';
 import { useAuthStore } from '@/store/authStore';
-import { Loader2, Lock, ShieldCheck, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  Loader2,
+  Lock,
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
 
 export default function ForceChangePassword() {
   const { user, setAuth, accessToken, refreshToken } = useAuthStore();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
   if (!user || !user.mustChangePassword) return null;
 
+  // Mirrors PasswordSchema in the backend auth module so the user is told the
+  // exact rule they are missing instead of a generic "Invalid input data".
+  const passwordChecks = evaluatePassword(newPassword);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters long');
+    const formatError = passwordFormatError(newPassword);
+    if (formatError) {
+      setError(formatError);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -43,8 +59,23 @@ export default function ForceChangePassword() {
       }, 1500);
       
     } catch (err) {
-      const apiErr = err as { response?: { data?: { message?: string } } };
-      setError(apiErr.response?.data?.message || 'Failed to update password. Please try again.');
+      const apiErr = err as {
+        response?: {
+          data?: {
+            message?: string;
+            details?: { message?: string }[];
+          };
+        };
+      };
+      const data = apiErr.response?.data;
+      const issueMessages = (data?.details ?? [])
+        .map((issue) => issue.message)
+        .filter((message): message is string => Boolean(message));
+      setError(
+        issueMessages.length > 0
+          ? issueMessages.join(' ')
+          : data?.message || 'Failed to update password. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -90,26 +121,70 @@ export default function ForceChangePassword() {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">New Password</label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    placeholder="Min. 8 characters"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all font-medium placeholder:text-slate-400"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      autoComplete="new-password"
+                      placeholder="At least 8 characters"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pr-12 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all font-medium placeholder:text-slate-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword((visible) => !visible)}
+                      aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                      aria-pressed={showNewPassword}
+                      title={showNewPassword ? 'Hide password' : 'Show password'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      {showNewPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+
+                  <ul className="mt-2 space-y-1">
+                    {passwordChecks.map((rule) => (
+                      <li
+                        key={rule.label}
+                        className={`flex items-center gap-1.5 text-[11px] font-medium ${
+                          rule.met ? 'text-emerald-600' : 'text-slate-400'
+                        }`}
+                      >
+                        {rule.met ? (
+                          <CheckCircle2 size={12} className="flex-shrink-0" />
+                        ) : (
+                          <XCircle size={12} className="flex-shrink-0" />
+                        )}
+                        {rule.label}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Confirm Password</label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    placeholder="Repeat new password"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all font-medium placeholder:text-slate-400"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      autoComplete="new-password"
+                      placeholder="Repeat new password"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pr-12 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all font-medium placeholder:text-slate-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((visible) => !visible)}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      aria-pressed={showConfirmPassword}
+                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
                 </div>
               </div>
 

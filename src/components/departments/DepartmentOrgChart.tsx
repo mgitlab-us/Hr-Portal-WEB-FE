@@ -23,6 +23,8 @@ interface DepartmentOrgChartProps {
   onEditDepartment: (dept: Department) => void;
   onDeleteDepartment: (dept: Department) => void;
   onAssignEmployees: (dept: Department) => void;
+  /** Called when a department node is clicked (not its hover action buttons). */
+  onSelectDepartment?: (dept: Department) => void;
 }
 
 export function DepartmentOrgChart({
@@ -34,6 +36,7 @@ export function DepartmentOrgChart({
   onEditDepartment,
   onDeleteDepartment,
   onAssignEmployees,
+  onSelectDepartment,
 }: DepartmentOrgChartProps) {
   const totalEmployees = departments.reduce((sum, d) => sum + d._count.employees, 0);
 
@@ -60,7 +63,26 @@ export function DepartmentOrgChart({
               <ul>
                 {departments.map((dept) => (
                   <li key={dept.id}>
-                    <div className="group relative inline-flex flex-col items-start gap-2 sm:gap-2.5 px-3 py-3 sm:px-4 sm:py-3.5 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-[#2563EB]/40 hover:shadow-md transition-all min-w-[150px] sm:min-w-[200px] text-left">
+                    <div
+                      onClick={onSelectDepartment ? () => onSelectDepartment(dept) : undefined}
+                      onKeyDown={
+                        onSelectDepartment
+                          ? (e) => {
+                              // Ignore key presses that originate from the inner action buttons.
+                              if (e.target !== e.currentTarget) return;
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                onSelectDepartment(dept);
+                              }
+                            }
+                          : undefined
+                      }
+                      tabIndex={onSelectDepartment ? 0 : undefined}
+                      aria-label={onSelectDepartment ? `View employees in ${dept.name}` : undefined}
+                      className={`group relative inline-flex flex-col items-start gap-2 sm:gap-2.5 px-3 py-3 sm:px-4 sm:py-3.5 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-[#2563EB]/40 hover:shadow-md transition-all min-w-[150px] sm:min-w-[200px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                        onSelectDepartment ? 'cursor-pointer' : ''
+                      }`}
+                    >
                       <div className="flex items-center gap-2 sm:gap-2.5 w-full">
                         <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFF6FF] flex items-center justify-center flex-shrink-0">
                           <Building2 size={13} className="text-[#1D4ED8]" />
@@ -99,9 +121,12 @@ export function DepartmentOrgChart({
                         </span>
                       </span>
 
-                      {/* Hover actions */}
+                      {/* Hover actions (clicks here must not trigger department navigation) */}
                       {(canEdit || canAssignDepartment?.(dept)) && (
-                        <div className="absolute -top-2.5 -right-2.5 hidden group-hover:flex items-center gap-1">
+                        <div
+                          className="absolute -top-2.5 -right-2.5 hidden group-hover:flex items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           {canAssignDepartment?.(dept) && (
                             <button
                               onClick={() => onAssignEmployees(dept)}

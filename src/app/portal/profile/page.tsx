@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { passwordFormatError } from '@/lib/password';
 import { useAuthStore } from '@/store/authStore';
 import {
   User,
@@ -11,6 +12,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 interface PersonalStats {
@@ -20,7 +23,16 @@ interface PersonalStats {
 }
 
 function extractErrorMessage(err: unknown, defaultMsg: string): string {
-  const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
+  const errorObj = err as {
+    response?: {
+      data?: { message?: string; details?: { message?: string }[] };
+    };
+    message?: string;
+  };
+  const details = (errorObj?.response?.data?.details ?? [])
+    .map((issue) => issue.message)
+    .filter((message): message is string => Boolean(message));
+  if (details.length > 0) return details.join(' ');
   return errorObj?.response?.data?.message || errorObj?.message || defaultMsg;
 }
 
@@ -33,6 +45,8 @@ export default function EmployeeProfilePage() {
   // Change password states
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [pwdError, setPwdError] = useState('');
   const [pwdSuccess, setPwdSuccess] = useState('');
@@ -60,8 +74,9 @@ export default function EmployeeProfilePage() {
     setPwdError('');
     setPwdSuccess('');
 
-    if (newPassword.length < 8) {
-      setPwdError('New password must be at least 8 characters long.');
+    const formatError = passwordFormatError(newPassword);
+    if (formatError) {
+      setPwdError(formatError);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -226,30 +241,59 @@ export default function EmployeeProfilePage() {
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 New Password
               </label>
-              <input
-                type="password"
-                required
-                minLength={8}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="At least 8 characters"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-              />
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  className="w-full px-3 py-2 pr-10 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((visible) => !visible)}
+                  aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                  aria-pressed={showNewPassword}
+                  title={showNewPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-400">
+                Use 8+ characters with an uppercase letter, a lowercase letter, and a number.
+              </p>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Confirm New Password
               </label>
-              <input
-                type="password"
-                required
-                minLength={8}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-type new password"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-type new password"
+                  className="w-full px-3 py-2 pr-10 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((visible) => !visible)}
+                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                  aria-pressed={showConfirmPassword}
+                  title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             <button

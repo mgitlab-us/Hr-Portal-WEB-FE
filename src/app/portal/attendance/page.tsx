@@ -53,6 +53,17 @@ function formatDuration(totalMinutes?: number | null) {
   return `${Math.floor(totalMinutes / 60)}h ${Math.abs(totalMinutes % 60)}m`;
 }
 
+/** Compact label: 45 -> "45m", 60 -> "1h", 61 -> "1h 1m". */
+function formatMinutesCompact(totalMinutes?: number | null) {
+  const minutes = Math.round(totalMinutes ?? 0);
+  if (minutes <= 0) return '0m';
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours === 0) return `${remainder}m`;
+  if (remainder === 0) return `${hours}h`;
+  return `${hours}h ${remainder}m`;
+}
+
 function formatSignedDuration(totalMinutes?: number | null) {
   if (totalMinutes === null || totalMinutes === undefined || totalMinutes === 0) return '0m';
   const sign = totalMinutes < 0 ? '-' : '+';
@@ -363,7 +374,7 @@ export default function MyAttendancePage() {
                       </span>
                       {hasLate && (
                         <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                          {item.dailySummary?.lateMinutes}m late
+                          {formatMinutesCompact(item.dailySummary?.lateMinutes)} late
                         </span>
                       )}
                       {hasMissedCheckout && (
