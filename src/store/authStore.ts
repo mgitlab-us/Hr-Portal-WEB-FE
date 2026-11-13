@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { clearNotificationCaches } from '@/lib/notifications';
 
 interface UserPermissions {
   companyWide: boolean;
@@ -70,6 +71,9 @@ export const useAuthStore = create<AuthState>()(
           // state update. A stale persisted user makes protected layouts think
           // the session is still valid and immediately re-fetch with no tokens.
           localStorage.removeItem('auth-storage');
+          // The bell feed is per-tenant client state; a different user on this
+          // browser must never inherit it.
+          clearNotificationCaches();
           // Clear cookie for middleware
           document.cookie = "isAuthenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         }

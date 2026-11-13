@@ -8,11 +8,14 @@ import {
 import { api } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
 import { useAuthStore } from '@/store/authStore';
+import { DurationInput } from '@/components/ui/duration-input';
 
-const formatMinutes = (totalMinutes: number) => ({
-  h: Math.floor(totalMinutes / 60),
-  m: totalMinutes % 60,
-});
+const formatDuration = (totalMinutes: number) => {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+};
 
 const MAX_LOGO_SIZE_MB = 1;
 
@@ -161,7 +164,9 @@ export default function GeneralPanel() {
       if (localCheckin.period === 'PM') h24 += 12;
 
       const startTotal = h24 * 60 + localCheckin.minute;
-      const endTotal = startTotal + settings.workMinutesPerDay + settings.breakMinutesAllocated;
+      const workMinutesPerDay = Math.max(60, settings.workMinutesPerDay);
+      const breakMinutesAllocated = Math.max(0, settings.breakMinutesAllocated);
+      const endTotal = startTotal + workMinutesPerDay + breakMinutesAllocated;
       const endHour = Math.floor((endTotal % (24 * 60)) / 60);
       const endMinute = endTotal % 60;
 
@@ -171,12 +176,14 @@ export default function GeneralPanel() {
       await api.put('/attendance/settings/company-shift', {
         shiftStart,
         shiftEnd,
-        breakMinutesAllocated: settings.breakMinutesAllocated,
+        breakMinutesAllocated,
         gracePeriodMinutes: settings.gracePeriodMinutes,
       });
 
       setSettings((prev) => ({
         ...prev,
+        workMinutesPerDay,
+        breakMinutesAllocated,
         expectedCheckinHour: h24,
         expectedCheckinMinute: localCheckin.minute,
       }));
@@ -216,8 +223,8 @@ export default function GeneralPanel() {
     );
   }
 
-  const workDur = formatMinutes(settings.workMinutesPerDay);
-  const breakDur = formatMinutes(settings.breakMinutesAllocated);
+  const workDuration = formatDuration(settings.workMinutesPerDay);
+  const breakDuration = formatDuration(settings.breakMinutesAllocated);
 
   return (
     <div className="max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -475,20 +482,38 @@ export default function GeneralPanel() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Work duration</label>
+                <DurationInput
+                  value={settings.workMinutesPerDay}
+                  onChange={(value) => setSettings({ ...settings, workMinutesPerDay: value })}
+                  ariaLabel="Work duration"
+                />
+                <p className="text-[10px] text-slate-400">Minimum 1 hour.</p>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Break duration</label>
+                <DurationInput
+                  value={settings.breakMinutesAllocated}
+                  onChange={(value) => setSettings({ ...settings, breakMinutesAllocated: value })}
+                  ariaLabel="Break duration"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <NumInput label="Grace (min)" value={settings.gracePeriodMinutes} onChange={(v) => setSettings({ ...settings, gracePeriodMinutes: v })} />
-              <NumInput label="Work (min)" value={settings.workMinutesPerDay} onChange={(v) => setSettings({ ...settings, workMinutesPerDay: v })} />
-              <NumInput label="Break (min)" value={settings.breakMinutesAllocated} onChange={(v) => setSettings({ ...settings, breakMinutesAllocated: v })} />
             </div>
 
             <div className="pt-3 border-t border-slate-50 grid grid-cols-2 gap-4 text-center">
               <div>
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Work Day</p>
-                <p className="text-sm font-semibold text-slate-700 mt-0.5">{workDur.h}h {workDur.m}m</p>
+                <p className="text-sm font-semibold text-slate-700 mt-0.5">{workDuration}</p>
               </div>
               <div>
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Break Time</p>
-                <p className="text-sm font-semibold text-slate-700 mt-0.5">{breakDur.h}h {breakDur.m}m</p>
+                <p className="text-sm font-semibold text-slate-700 mt-0.5">{breakDuration}</p>
               </div>
             </div>
           </div>

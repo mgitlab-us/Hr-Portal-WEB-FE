@@ -872,7 +872,7 @@ export default function AttendanceLogsPage() {
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Break Taken
+                    Break
                   </span>
                   <span className="text-sm font-semibold text-slate-700">
                     {formatBreakMinutes(inspectLog.totalBreakMinutes)}

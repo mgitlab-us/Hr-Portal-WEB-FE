@@ -19,9 +19,12 @@ import {
   Search,
   Building2,
   RotateCcw,
+  UserPlus,
+  Info,
+  AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatDateDMY, formatWeekdayDateDMY } from '@/lib/datetime';
+import { formatDateDMY, formatDateRangeDMY, formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuthStore } from '@/store/authStore';
 import FilterChips from '@/components/filters/FilterChips';
@@ -107,8 +110,58 @@ interface CalendarLeave {
 }
 
 type LeaveTypeFilter = 'ALL' | 'SICK' | 'CASUAL' | 'VACATION' | 'OTHER';
-type PageTab = 'approvals' | 'calendar';
+type PageTab = 'approvals' | 'calendar' | 'record';
 type ApprovalQueue = 'MANAGER' | 'HR';
+type OnBehalfKind = 'SICK' | 'CASUAL' | 'VACATION' | 'UNPAID' | 'ABSENT';
+
+interface OnBehalfEmployee {
+  id: string;
+  name: string;
+  role: string;
+  departmentId?: string | null;
+  department?: { id: string; name: string } | null;
+  profile?: { employeeCode?: string | null; designation?: string | null } | null;
+}
+
+const ON_BEHALF_KINDS: Array<{
+  value: OnBehalfKind;
+  label: string;
+  hint: string;
+}> = [
+  { value: 'SICK', label: 'Sick leave', hint: 'Uses the employee’s sick allowance.' },
+  { value: 'CASUAL', label: 'Casual leave', hint: 'Uses the employee’s casual allowance.' },
+  { value: 'VACATION', label: 'Annual / vacation', hint: 'Uses the employee’s annual allowance.' },
+  {
+    value: 'UNPAID',
+    label: 'Unpaid leave',
+    hint: 'Recorded as unpaid. It never consumes a paid allowance.',
+  },
+  {
+    value: 'ABSENT',
+    label: 'Absent',
+    hint: 'Marks attendance ABSENT for past working days. No leave balance is used.',
+  },
+];
+
+/** Company-timezone calendar key (YYYY-MM-DD) for date inputs and limits. */
+function companyDateKey(date: Date, timeZone?: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone || 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
+function shiftDateKey(key: string, days: number): string {
+  const date = new Date(`${key}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
 
 const formatDate = (dateStr: string) => formatWeekdayDateDMY(dateStr);
 
@@ -172,6 +225,8 @@ export default function LeavesPage() {
   const { user } = useAuthStore();
   const isManager = user?.role === 'MANAGER';
   const canUseHrQueue = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  // Only staff with approval authority may record entries for someone else.
+  const canRecordOnBehalf = isManager || canUseHrQueue;
   const [tab, setTab] = useState<PageTab>('approvals');
   const [queue, setQueue] = useState<ApprovalQueue>('MANAGER');
   const [managerRequests, setManagerRequests] = useState<LeaveRequest[]>([]);
@@ -188,6 +243,24 @@ export default function LeavesPage() {
   const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // "Record on behalf" form. Managers and HR admins use this when an employee
+  // cannot file a request themselves (emergencies, technical issues, non-tech
+  // staff). Entries are approved immediately.
+  const companyTimeZone = user?.company?.timezone;
+  const todayKey = companyDateKey(new Date(), companyTimeZone);
+  const yesterdayKey = shiftDateKey(todayKey, -1);
+  const [onBehalfEmployees, setOnBehalfEmployees] = useState<OnBehalfEmployee[]>([]);
+  const [onBehalfEmployeesLoaded, setOnBehalfEmployeesLoaded] = useState(false);
+  const [onBehalfEmployeeId, setOnBehalfEmployeeId] = useState('');
+  const [onBehalfEmployeeSearch, setOnBehalfEmployeeSearch] = useState('');
+  const [onBehalfKind, setOnBehalfKind] = useState<OnBehalfKind>('SICK');
+  const [onBehalfStart, setOnBehalfStart] = useState(todayKey);
+  const [onBehalfEnd, setOnBehalfEnd] = useState(todayKey);
+  const [onBehalfDuration, setOnBehalfDuration] = useState<LeaveDuration>('FULL_DAY');
+  const [onBehalfReason, setOnBehalfReason] = useState('');
+  const [onBehalfSubmitting, setOnBehalfSubmitting] = useState(false);
+  const [onBehalfError, setOnBehalfError] = useState('');
 
   const fetchQueues = async () => {
     try {
@@ -232,6 +305,144 @@ export default function LeavesPage() {
     fetchCalendar(monthCursor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, monthCursor]);
+
+  useEffect(() => {
+    if (tab !== 'record' || !canRecordOnBehalf || onBehalfEmployeesLoaded) return;
+    let cancelled = false;
+    api
+      .get('/employees?scope=team')
+      .then((res) => {
+        if (cancelled) return;
+        const list: OnBehalfEmployee[] = Array.isArray(res.data)
+          ? res.data
+          : res.data?.data || [];
+        // The owner account never checks in, and nobody records their own leave
+        // on their own behalf.
+        setOnBehalfEmployees(
+          list.filter((employee) => employee.role !== 'SUPER_ADMIN' && employee.id !== user?.id)
+        );
+        setOnBehalfEmployeesLoaded(true);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('Failed to load employees for on-behalf entry:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, canRecordOnBehalf, onBehalfEmployeesLoaded, user?.id]);
+
+  const onBehalfIsAbsent = onBehalfKind === 'ABSENT';
+  const onBehalfSingleDay = !onBehalfStart || !onBehalfEnd || onBehalfStart === onBehalfEnd;
+  const onBehalfSelectedEmployee =
+    onBehalfEmployees.find((employee) => employee.id === onBehalfEmployeeId) ?? null;
+
+  const onBehalfFilteredEmployees = useMemo(() => {
+    const query = onBehalfEmployeeSearch.trim().toLowerCase();
+    if (!query) return onBehalfEmployees;
+    return onBehalfEmployees.filter((employee) => {
+      const code = employee.profile?.employeeCode || '';
+      const department = employee.department?.name || '';
+      return (
+        employee.name.toLowerCase().includes(query) ||
+        code.toLowerCase().includes(query) ||
+        department.toLowerCase().includes(query)
+      );
+    });
+  }, [onBehalfEmployees, onBehalfEmployeeSearch]);
+
+  const onBehalfDayCount = useMemo(() => {
+    if (!onBehalfStart || !onBehalfEnd || onBehalfEnd < onBehalfStart) return 0;
+    const days =
+      Math.floor(
+        (Date.parse(`${onBehalfEnd}T00:00:00.000Z`) -
+          Date.parse(`${onBehalfStart}T00:00:00.000Z`)) /
+          86_400_000
+      ) + 1;
+    if (onBehalfIsAbsent) return days;
+    return onBehalfSingleDay && onBehalfDuration !== 'FULL_DAY' ? 0.5 : days;
+  }, [onBehalfStart, onBehalfEnd, onBehalfIsAbsent, onBehalfSingleDay, onBehalfDuration]);
+
+  const handleOnBehalfKindChange = (kind: OnBehalfKind) => {
+    setOnBehalfKind(kind);
+    setOnBehalfError('');
+    if (kind === 'ABSENT') {
+      setOnBehalfDuration('FULL_DAY');
+      if (!onBehalfStart || onBehalfStart >= todayKey) setOnBehalfStart(yesterdayKey);
+      if (!onBehalfEnd || onBehalfEnd >= todayKey) setOnBehalfEnd(yesterdayKey);
+    }
+  };
+
+  const resetOnBehalfForm = (kind: OnBehalfKind = onBehalfKind) => {
+    const defaultDate = kind === 'ABSENT' ? yesterdayKey : todayKey;
+    setOnBehalfReason('');
+    setOnBehalfStart(defaultDate);
+    setOnBehalfEnd(defaultDate);
+    setOnBehalfDuration('FULL_DAY');
+    setOnBehalfError('');
+  };
+
+  const handleCreateOnBehalf = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setOnBehalfError('');
+
+    if (!onBehalfEmployeeId) {
+      setOnBehalfError('Select the employee this entry is for.');
+      return;
+    }
+    if (!onBehalfStart || !onBehalfEnd) {
+      setOnBehalfError('Choose a start and end date.');
+      return;
+    }
+    if (onBehalfEnd < onBehalfStart) {
+      setOnBehalfError('The end date cannot be before the start date.');
+      return;
+    }
+    if (onBehalfIsAbsent && onBehalfStart >= todayKey) {
+      setOnBehalfError('Absence can only be recorded for past dates.');
+      return;
+    }
+    if (!onBehalfIsAbsent && onBehalfDuration !== 'FULL_DAY' && !onBehalfSingleDay) {
+      setOnBehalfError('A half-day leave must start and end on the same date.');
+      return;
+    }
+    if (onBehalfReason.trim().length < 5) {
+      setOnBehalfError('Add a reason of at least 5 characters.');
+      return;
+    }
+
+    setOnBehalfSubmitting(true);
+    try {
+      const { data } = await api.post('/leaves/on-behalf', {
+        employeeId: onBehalfEmployeeId,
+        kind: onBehalfKind,
+        startDate: `${onBehalfStart}T00:00:00.000Z`,
+        endDate: `${onBehalfEnd}T00:00:00.000Z`,
+        reason: onBehalfReason.trim(),
+        ...(onBehalfIsAbsent
+          ? {}
+          : { duration: onBehalfSingleDay ? onBehalfDuration : 'FULL_DAY' }),
+      });
+
+      if (onBehalfIsAbsent) {
+        const dates: string[] = Array.isArray(data?.dates) ? data.dates : [];
+        toast.success(
+          dates.length > 0
+            ? `Marked absent on ${dates.length} day${dates.length === 1 ? '' : 's'}.`
+            : 'Absence recorded.'
+        );
+      } else {
+        toast.success('Leave recorded and approved on the employee’s behalf.');
+      }
+
+      resetOnBehalfForm();
+      await fetchQueues();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setOnBehalfError(e?.response?.data?.message || 'Unable to record this entry.');
+    } finally {
+      setOnBehalfSubmitting(false);
+    }
+  };
 
   const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     setProcessingId(id);
@@ -417,6 +628,20 @@ export default function LeavesPage() {
             <CalendarDays size={14} />
             Team calendar
           </button>
+          {canRecordOnBehalf && (
+            <button
+              type="button"
+              onClick={() => setTab('record')}
+              className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors ${
+                tab === 'record'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <UserPlus size={14} />
+              Record on behalf
+            </button>
+          )}
         </div>
 
         {tab === 'approvals' ? (
@@ -740,7 +965,7 @@ export default function LeavesPage() {
               </div>
             )}
           </>
-        ) : (
+        ) : tab === 'calendar' ? (
           <div className="overflow-hidden rounded-xl border border-line bg-white shadow-2xs">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
               <div className="flex items-center gap-2">
@@ -872,7 +1097,245 @@ export default function LeavesPage() {
               </div>
             )}
           </div>
-        )}
+        ) : tab === 'record' && canRecordOnBehalf ? (
+          <form
+            onSubmit={handleCreateOnBehalf}
+            className="space-y-4 rounded-xl border border-line bg-white p-4 shadow-2xs sm:p-5"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <UserPlus size={15} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-ink">Record leave on behalf of an employee</p>
+                  <p className="text-xs text-ink-soft">
+                    Use this when staff cannot submit a request themselves. Additions are
+                    approved immediately and written to the audit trail.
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-700">
+                <ShieldCheck size={11} />
+                Audit logged
+              </span>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="onBehalfEmployeeSearch"
+                  className="text-[10px] font-bold uppercase tracking-wider text-ink-soft"
+                >
+                  Employee
+                </label>
+                <div className="relative">
+                  <Search
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    id="onBehalfEmployeeSearch"
+                    type="text"
+                    placeholder="Search name, code, department…"
+                    value={onBehalfEmployeeSearch}
+                    onChange={(e) => setOnBehalfEmployeeSearch(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
+                  />
+                </div>
+                <select
+                  required
+                  value={onBehalfEmployeeId}
+                  onChange={(e) => setOnBehalfEmployeeId(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-400"
+                >
+                  <option value="">Select an employee…</option>
+                  {onBehalfFilteredEmployees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.name}
+                      {employee.profile?.employeeCode
+                        ? ` · ${employee.profile.employeeCode}`
+                        : ''}
+                      {employee.department?.name ? ` · ${employee.department.name}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {onBehalfEmployeesLoaded && onBehalfFilteredEmployees.length === 0 && (
+                  <p className="text-[11px] text-slate-400">
+                    {onBehalfEmployees.length === 0
+                      ? 'No employees are in your department scope.'
+                      : 'No employees match this search.'}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="onBehalfKind"
+                  className="text-[10px] font-bold uppercase tracking-wider text-ink-soft"
+                >
+                  Type
+                </label>
+                <select
+                  id="onBehalfKind"
+                  value={onBehalfKind}
+                  onChange={(e) => handleOnBehalfKindChange(e.target.value as OnBehalfKind)}
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-400"
+                >
+                  {ON_BEHALF_KINDS.map((kind) => (
+                    <option key={kind.value} value={kind.value}>
+                      {kind.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="flex items-start gap-1 text-[11px] text-slate-400">
+                  <Info size={11} className="mt-0.5 flex-shrink-0" />
+                  {ON_BEHALF_KINDS.find((kind) => kind.value === onBehalfKind)?.hint}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="onBehalfStart"
+                    className="text-[10px] font-bold uppercase tracking-wider text-ink-soft"
+                  >
+                    From
+                  </label>
+                  <input
+                    id="onBehalfStart"
+                    type="date"
+                    required
+                    value={onBehalfStart}
+                    max={onBehalfIsAbsent ? yesterdayKey : undefined}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setOnBehalfStart(value);
+                      if (!onBehalfEnd || onBehalfEnd < value) setOnBehalfEnd(value);
+                    }}
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="onBehalfEnd"
+                    className="text-[10px] font-bold uppercase tracking-wider text-ink-soft"
+                  >
+                    To
+                  </label>
+                  <input
+                    id="onBehalfEnd"
+                    type="date"
+                    required
+                    value={onBehalfEnd}
+                    min={onBehalfStart || undefined}
+                    max={onBehalfIsAbsent ? yesterdayKey : undefined}
+                    onChange={(e) => setOnBehalfEnd(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="onBehalfDuration"
+                  className="text-[10px] font-bold uppercase tracking-wider text-ink-soft"
+                >
+                  Duration
+                </label>
+                <select
+                  id="onBehalfDuration"
+                  value={onBehalfIsAbsent ? 'FULL_DAY' : onBehalfDuration}
+                  disabled={onBehalfIsAbsent || !onBehalfSingleDay}
+                  onChange={(e) => setOnBehalfDuration(e.target.value as LeaveDuration)}
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-400 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                >
+                  <option value="FULL_DAY">Full day</option>
+                  <option value="FIRST_HALF">First half · AM</option>
+                  <option value="SECOND_HALF">Second half · PM</option>
+                </select>
+                <p className="text-[11px] text-slate-400">
+                  {onBehalfIsAbsent
+                    ? 'Absence always covers the full day.'
+                    : !onBehalfSingleDay
+                      ? 'Half days are only available for a single date.'
+                      : `${onBehalfDayCount} day${onBehalfDayCount === 1 ? '' : 's'} will be recorded.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label
+                htmlFor="onBehalfReason"
+                className="text-[10px] font-bold uppercase tracking-wider text-ink-soft"
+              >
+                Reason
+              </label>
+              <textarea
+                id="onBehalfReason"
+                required
+                rows={3}
+                value={onBehalfReason}
+                onChange={(e) => setOnBehalfReason(e.target.value)}
+                placeholder={
+                  onBehalfIsAbsent
+                    ? 'Why is this absence being recorded? e.g. No show, unapproved leave'
+                    : 'Why is this leave being recorded on their behalf?'
+                }
+                className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
+              />
+            </div>
+
+            {onBehalfError && (
+              <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                <span>{onBehalfError}</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+              <div className="max-w-md space-y-0.5">
+                {onBehalfSelectedEmployee && (
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    {ON_BEHALF_KINDS.find((kind) => kind.value === onBehalfKind)?.label} ·{' '}
+                    {onBehalfSelectedEmployee.name} ·{' '}
+                    {formatDateRangeDMY(onBehalfStart, onBehalfEnd)}
+                  </p>
+                )}
+                <p className="text-[11px] text-slate-400">
+                  {onBehalfIsAbsent
+                    ? 'Writes ABSENT to attendance for past working days. Weekends and holidays are skipped, and days that already have attendance or approved leave are rejected.'
+                    : 'The request is created already approved, the balance is deducted, and attendance is updated for full days.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOnBehalfEmployeeId('');
+                    setOnBehalfEmployeeSearch('');
+                    resetOnBehalfForm();
+                  }}
+                  className="btn-ghost rounded-lg px-3 py-1.5 text-xs font-semibold"
+                >
+                  Clear
+                </button>
+                <button
+                  type="submit"
+                  disabled={onBehalfSubmitting}
+                  className="btn-primary flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold shadow-2xs disabled:opacity-70"
+                >
+                  {onBehalfSubmitting ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Check size={13} />
+                  )}
+                  {onBehalfIsAbsent ? 'Record absence' : 'Record leave'}
+                </button>
+              </div>
+            </div>
+          </form>
+        ) : null}
       </div>
     </DashboardLayout>
   );

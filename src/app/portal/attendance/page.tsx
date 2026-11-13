@@ -75,6 +75,22 @@ function formatStatus(status: string) {
   return status.toLowerCase().replace(/_/g, ' ');
 }
 
+function checkMissedCheckout(item: {
+  status?: string;
+  checkinTime?: string | null;
+  checkoutTime?: string | null;
+  date?: string | Date;
+}): boolean {
+  if (item.status === 'FLAGGED') return true;
+  if (item.status === 'ABSENT' || item.status === 'ON_LEAVE') return false;
+  if (!item.date || !item.checkinTime || item.checkoutTime) return false;
+  const d = new Date(item.date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const recordMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return recordMidnight < today.getTime();
+}
+
 export default function MyAttendancePage() {
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,7 +162,7 @@ export default function MyAttendancePage() {
 
       if (filterMode === 'ISSUES') {
         const isLate = (item.dailySummary?.lateMinutes || 0) > 0;
-        const missedCheckout = !item.checkoutTime;
+        const missedCheckout = checkMissedCheckout(item);
         return isLate || missedCheckout;
       }
       return true;
@@ -165,7 +181,7 @@ export default function MyAttendancePage() {
     const daysPresent = monthRecords.filter((r) => r.status !== 'ABSENT' && r.status !== 'ON_LEAVE').length;
     const daysLate = monthRecords.filter((r) => (r.dailySummary?.lateMinutes || 0) > 0).length;
     const daysAbsent = monthRecords.filter((r) => r.status === 'ABSENT').length;
-    const missedPunches = monthRecords.filter((r) => !r.checkoutTime).length;
+    const missedPunches = monthRecords.filter((r) => checkMissedCheckout(r)).length;
     const totalMinutesWorked = monthRecords.reduce(
       (sum, r) => sum + (r.dailySummary?.totalWorkMinutes || 0),
       0
@@ -357,7 +373,7 @@ export default function MyAttendancePage() {
           <ul className="divide-y divide-line">
             {filteredHistory.map((item) => {
               const hasLate = (item.dailySummary?.lateMinutes || 0) > 0;
-              const hasMissedCheckout = !item.checkoutTime;
+              const hasMissedCheckout = checkMissedCheckout(item);
               const hasIssue = hasLate || hasMissedCheckout;
 
               return (
@@ -394,7 +410,7 @@ export default function MyAttendancePage() {
                     <div>
                       <dt className="text-xs text-slate-500">Check out</dt>
                       <dd className={`mt-0.5 font-semibold ${hasMissedCheckout ? 'text-rose-600' : 'text-slate-900'}`}>
-                        {item.checkoutTime ? formatTime(item.checkoutTime) : 'Missed'}
+                        {item.checkoutTime ? formatTime(item.checkoutTime) : (hasMissedCheckout ? 'Missed' : '--:--')}
                       </dd>
                     </div>
                     <div>
@@ -406,7 +422,19 @@ export default function MyAttendancePage() {
                     <div>
                       <dt className="text-xs text-slate-500">Break</dt>
                       <dd className="mt-0.5 font-semibold text-amber-600">
-                        {formatDuration(item.dailySummary?.totalBreakMinutes)}
+                        {item.dailySummary
+                          ? formatMinutesCompact(item.dailySummary.totalBreakMinutes)
+                          : '--'}
+                        {item.dailySummary?.totalBreakMinutes != null &&
+                          item.dailySummary.totalBreakMinutes > 0 &&
+                          (item.breakSessions?.length ?? 0) === 0 && (
+                            <span
+                              className="ml-1 text-[11px] font-medium text-slate-400"
+                              title="No break was logged, so the allocated break is assumed"
+                            >
+                              assigned
+                            </span>
+                          )}
                       </dd>
                     </div>
                     <div>

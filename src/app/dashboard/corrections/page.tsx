@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import {
-  CheckCircle2, MessageSquare, ChevronRight, Loader2, Calendar, Check, X, ArrowRight, Search, Building2, RotateCcw,
+  CheckCircle2, MessageSquare, ChevronRight, Loader2, Calendar, Check, X, ArrowRight, Search, Building2, RotateCcw, Coffee,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDayMonth, formatTime12h, formatWeekdayDateDMY } from '@/lib/datetime';
@@ -14,10 +14,15 @@ interface CorrectionRequest {
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   approvalStage?: 'MANAGER' | 'HR' | 'COMPLETE';
+  correctionType?: 'ATTENDANCE' | 'BREAK';
   originalCheckin: string | null;
   originalCheckout: string | null;
   requestedCheckin: string | null;
   requestedCheckout: string | null;
+  originalBreakStart?: string | null;
+  originalBreakEnd?: string | null;
+  requestedBreakStart?: string | null;
+  requestedBreakEnd?: string | null;
   createdAt: string;
   employee: {
     name: string;
@@ -27,6 +32,15 @@ interface CorrectionRequest {
   };
   attendanceRecord: { date: string };
 }
+
+const formatDurationBetween = (start?: string | null, end?: string | null) => {
+  if (!start || !end) return null;
+  const minutes = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000);
+  if (!Number.isFinite(minutes) || minutes < 0) return null;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return hours > 0 ? `${hours}h ${rest}m` : `${rest}m`;
+};
 
 const formatTo12h = (dateStr: string | null) => {
   if (!dateStr) return '--:--';
@@ -51,11 +65,17 @@ function TimeBlock({
   checkin,
   checkout,
   variant,
+  startLabel = 'In',
+  endLabel = 'Out',
+  duration,
 }: {
   label: string;
   checkin: string | null;
   checkout: string | null;
   variant: 'default' | 'requested';
+  startLabel?: string;
+  endLabel?: string;
+  duration?: string | null;
 }) {
   const isRequested = variant === 'requested';
   return (
@@ -70,19 +90,24 @@ function TimeBlock({
       </p>
       <div className="flex items-center gap-2">
         <div>
-          <p className={`text-[8px] font-semibold uppercase mb-0.5 ${isRequested ? 'text-blue-300' : 'text-slate-400'}`}>In</p>
+          <p className={`text-[8px] font-semibold uppercase mb-0.5 ${isRequested ? 'text-blue-300' : 'text-slate-400'}`}>{startLabel}</p>
           <p className={`text-xs font-semibold tabular-nums whitespace-nowrap ${isRequested ? 'text-blue-700' : 'text-slate-500'}`}>
             {formatTo12h(checkin)}
           </p>
         </div>
         <ChevronRight size={10} className={isRequested ? 'text-blue-200' : 'text-slate-300'} />
         <div>
-          <p className={`text-[8px] font-semibold uppercase mb-0.5 ${isRequested ? 'text-blue-300' : 'text-slate-400'}`}>Out</p>
+          <p className={`text-[8px] font-semibold uppercase mb-0.5 ${isRequested ? 'text-blue-300' : 'text-slate-400'}`}>{endLabel}</p>
           <p className={`text-xs font-semibold tabular-nums whitespace-nowrap ${isRequested ? 'text-blue-700' : 'text-slate-500'}`}>
             {formatTo12h(checkout)}
           </p>
         </div>
       </div>
+      {duration && (
+        <p className={`mt-1.5 text-[9px] font-semibold ${isRequested ? 'text-blue-400' : 'text-slate-400'}`}>
+          Duration: {duration}
+        </p>
+      )}
     </div>
   );
 }
@@ -106,6 +131,25 @@ function CorrectionCard({
   const requestedCheckin = req.requestedCheckin ?? req.originalCheckin;
   const requestedCheckout = req.requestedCheckout ?? req.originalCheckout;
 
+  const isBreak = req.correctionType === 'BREAK';
+  const originalBreakStart = req.originalBreakStart ?? null;
+  const originalBreakEnd = req.originalBreakEnd ?? null;
+  const requestedBreakStart = req.requestedBreakStart ?? originalBreakStart;
+  const requestedBreakEnd = req.requestedBreakEnd ?? originalBreakEnd;
+
+  const originalStart = isBreak ? originalBreakStart : req.originalCheckin;
+  const originalEnd = isBreak ? originalBreakEnd : req.originalCheckout;
+  const requestedStart = isBreak ? requestedBreakStart : requestedCheckin;
+  const requestedEnd = isBreak ? requestedBreakEnd : requestedCheckout;
+  const startLabel = isBreak ? 'Start' : 'In';
+  const endLabel = isBreak ? 'End' : 'Out';
+  const originalDuration = isBreak
+    ? formatDurationBetween(originalStart, originalEnd) ?? 'Active'
+    : null;
+  const requestedDuration = isBreak
+    ? formatDurationBetween(requestedStart, requestedEnd) ?? 'Active'
+    : null;
+
   return (
     <div className="bg-white border border-slate-100 rounded-xl overflow-hidden hover:shadow-md hover:border-slate-200 transition-all duration-200">
       <div className="p-4 sm:p-5 flex flex-col gap-4">
@@ -127,6 +171,16 @@ function CorrectionCard({
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-slate-400 flex-shrink-0">
+            <span
+              className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                isBreak
+                  ? 'border-orange-200 bg-orange-50 text-orange-700'
+                  : 'border-sky-200 bg-sky-50 text-sky-700'
+              }`}
+            >
+              {isBreak ? <Coffee size={9} /> : null}
+              {isBreak ? 'Break' : 'Punch'}
+            </span>
             {req.approvalStage === 'MANAGER' && (
               <span className="hidden rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700 sm:inline">
                 Stage 1 · Manager
@@ -146,19 +200,25 @@ function CorrectionCard({
         {/* Row 2: Time boxes + arrow + action buttons — all in one line */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           <TimeBlock
-            label="Current"
-            checkin={req.originalCheckin}
-            checkout={req.originalCheckout}
+            label={isBreak ? 'Current break' : 'Current'}
+            checkin={originalStart}
+            checkout={originalEnd}
             variant="default"
+            startLabel={startLabel}
+            endLabel={endLabel}
+            duration={originalDuration}
           />
 
           <ArrowRight size={13} className="text-slate-300 flex-shrink-0" />
 
           <TimeBlock
             label="Requested"
-            checkin={requestedCheckin}
-            checkout={requestedCheckout}
+            checkin={requestedStart}
+            checkout={requestedEnd}
             variant="requested"
+            startLabel={startLabel}
+            endLabel={endLabel}
+            duration={requestedDuration}
           />
 
           {/* Divider */}
@@ -207,6 +267,7 @@ export default function CorrectionsPage() {
   const { toast } = useToast();
   const { user } = useAuthStore();
   const isManager = user?.role === 'MANAGER';
+  const isHrAdmin = user?.role === 'ADMIN';
   const canUseHrQueue = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const [managerRequests, setManagerRequests] = useState<CorrectionRequest[]>([]);
   const [hrRequests, setHrRequests] = useState<CorrectionRequest[]>([]);
@@ -244,7 +305,7 @@ export default function CorrectionsPage() {
       await api.patch(`/corrections/${id}/review`, { status });
       await fetchRequests();
       toast.success(
-        status === 'APPROVED' && queue === 'MANAGER'
+        status === 'APPROVED' && queue === 'MANAGER' && !isHrAdmin
           ? 'Correction approved and sent to HR for final approval.'
           : `Correction request ${status === 'APPROVED' ? 'approved' : 'rejected'}.`
       );
@@ -256,7 +317,12 @@ export default function CorrectionsPage() {
     }
   };
 
-  const rawRequests = queue === 'MANAGER' ? managerRequests : hrRequests;
+  // An HR admin cannot act on stage-one requests (that is the reporting
+  // manager's job), but their department's final-approval queue is still their
+  // "My team" view. Showing it there avoids an empty tab while the same
+  // requests appear under HR final approval.
+  const myTeamRequests = isHrAdmin ? hrRequests : managerRequests;
+  const rawRequests = queue === 'MANAGER' ? myTeamRequests : hrRequests;
   const hasActiveFilters = !!search || departmentFilter !== 'ALL';
   const resetFilters = () => {
     setSearch('');
@@ -277,7 +343,9 @@ export default function CorrectionsPage() {
       req.employee.profile?.department === departmentFilter;
     return matchesSearch && matchesDept;
   });
-  const totalPending = managerRequests.length + hrRequests.length;
+  const totalPending = isHrAdmin
+    ? hrRequests.length
+    : managerRequests.length + hrRequests.length;
 
   return (
     <DashboardLayout>
@@ -293,7 +361,7 @@ export default function CorrectionsPage() {
               Correction Center
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-              Review and approve attendance modification requests
+              Review and approve attendance and break modification requests
             </p>
           </div>
           {totalPending > 0 && (
@@ -316,9 +384,9 @@ export default function CorrectionsPage() {
                 : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
             }`}
           >
-            My team · {managerRequests.length}
+            My team · {myTeamRequests.length}
           </button>
-          {canUseHrQueue && (
+          {canUseHrQueue && !isHrAdmin && (
             <button
               type="button"
               onClick={() => setQueue('HR')}
@@ -333,7 +401,9 @@ export default function CorrectionsPage() {
           )}
           <span className="ml-auto text-[11px] text-slate-400">
             {queue === 'MANAGER'
-              ? 'Manager approval moves the correction to HR.'
+              ? isHrAdmin
+                ? 'Final approval for employees in your departments.'
+                : 'Manager approval moves the correction to HR.'
               : 'HR approval is final and updates attendance.'}
           </span>
         </div>
