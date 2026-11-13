@@ -136,6 +136,28 @@ function formatDuration(totalMinutes?: number | null) {
   return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
 }
 
+/** Stopwatch: `MM:SS` until one hour, then `H:MM:SS` (never `121:05`). */
+function formatBreakClock(totalSeconds: number) {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+/** Compact minutes label: 45 -> "45m", 60 -> "1h", 121 -> "2h 1m". */
+function formatBreakMinutes(totalMinutes: number) {
+  const minutes = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours === 0) return `${remainder}m`;
+  if (remainder === 0) return `${hours}h`;
+  return `${hours}h ${remainder}m`;
+}
+
 function getGreeting(date: Date) {
   const hour = date.getHours();
   if (hour < 12) return 'Good morning';
@@ -407,9 +429,7 @@ export default function EmployeePortalHomePage() {
   const StatusIcon = ui.Icon;
 
   // Format active break stopwatch
-  const breakMinutes = Math.floor(activeBreakElapsed / 60);
-  const breakSeconds = activeBreakElapsed % 60;
-  const breakTimerString = `${String(breakMinutes).padStart(2, '0')}:${String(breakSeconds).padStart(2, '0')}`;
+  const breakTimerString = formatBreakClock(activeBreakElapsed);
 
   const totalBreakSecondsSoFar = totalBreakSeconds + activeBreakElapsed;
   const totalBreakMinutesSoFar = Math.floor(totalBreakSecondsSoFar / 60);
@@ -583,7 +603,7 @@ export default function EmployeePortalHomePage() {
               <div className="flex items-baseline justify-between text-xs">
                 <span className="text-slate-500">Break time used</span>
                 <span className={`font-semibold ${breakOverLimit ? 'text-rose-600' : 'text-slate-700'}`}>
-                  {totalBreakMinutesSoFar}m / {BREAK_LIMIT_MINUTES}m
+                  {formatBreakMinutes(totalBreakMinutesSoFar)} / {formatBreakMinutes(BREAK_LIMIT_MINUTES)}
                 </span>
               </div>
               <div
@@ -606,6 +626,16 @@ export default function EmployeePortalHomePage() {
                 <p className="text-xs font-medium uppercase tracking-wider text-amber-700">Active break</p>
                 <p className="my-1 text-3xl font-semibold tabular-nums text-amber-800">{breakTimerString}</p>
                 <p className="text-xs text-amber-700">Started at {formatTime(activeBreak.startTime)}</p>
+                {activeBreakElapsed >= 45 * 60 && record?.id && (
+                  <Link
+                    href={`/portal/corrections?mode=BREAK&recordId=${encodeURIComponent(
+                      record.id
+                    )}&breakSessionId=${encodeURIComponent(activeBreak.id)}`}
+                    className="mt-2 inline-flex items-center justify-center gap-1 text-[11px] font-bold text-amber-800 underline decoration-amber-300 underline-offset-2 transition-colors hover:text-amber-950"
+                  >
+                    Forgot to stop your break? Request break correction
+                  </Link>
+                )}
               </div>
             ) : (
               <p className="mt-4 text-[13px] leading-relaxed text-slate-500">

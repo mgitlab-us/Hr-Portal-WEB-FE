@@ -83,6 +83,21 @@ const AVATAR_COLORS = [
   { bg: '#FEE9ED', text: '#E8405A' },
   { bg: '#E0F0FF', text: '#2563EB' },
 ];
+
+// Hierarchy order for the people list: managers first, then HR admins, then staff.
+const ROLE_HIERARCHY: Record<Employee['role'], number> = {
+  MANAGER: 0,
+  ADMIN: 1,
+  EMPLOYEE: 2,
+  SUPER_ADMIN: 3,
+};
+
+function compareByRoleThenName(a: Employee, b: Employee) {
+  const rank = (ROLE_HIERARCHY[a.role] ?? 99) - (ROLE_HIERARCHY[b.role] ?? 99);
+  if (rank !== 0) return rank;
+  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+}
+
 function avatarColor(name: string) {
   const i = (name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % AVATAR_COLORS.length;
   return AVATAR_COLORS[i];
@@ -350,20 +365,22 @@ function EmployeesPageContent() {
     const admins = scopedEmployees.filter((emp) => emp.role === 'ADMIN').length;
     return [
       { label: 'All roles', value: 'ALL', count: scopedEmployees.length },
-      { label: 'Employees', value: 'EMPLOYEE', count: staff },
       { label: 'Managers', value: 'MANAGER', count: managers },
       { label: 'HR Admins', value: 'ADMIN', count: admins },
+      { label: 'Employees', value: 'EMPLOYEE', count: staff },
     ];
   }, [scopedEmployees]);
 
   const filteredEmployees = useMemo(() => {
-    return scopedEmployees.filter((emp) => {
-      const matchesStatus =
-        statusFilter === 'ALL' ||
-        (statusFilter === 'ACTIVE' ? emp.isActive : !emp.isActive);
-      const matchesRole = roleFilter === 'ALL' || emp.role === roleFilter;
-      return matchesStatus && matchesRole;
-    });
+    return scopedEmployees
+      .filter((emp) => {
+        const matchesStatus =
+          statusFilter === 'ALL' ||
+          (statusFilter === 'ACTIVE' ? emp.isActive : !emp.isActive);
+        const matchesRole = roleFilter === 'ALL' || emp.role === roleFilter;
+        return matchesStatus && matchesRole;
+      })
+      .sort(compareByRoleThenName);
   }, [scopedEmployees, statusFilter, roleFilter]);
 
   const totalPages = Math.ceil(filteredEmployees.length / pageSize) || 1;

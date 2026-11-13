@@ -15,10 +15,9 @@ import {
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import HeaderActions, { type NotificationItem } from '@/components/layout/HeaderActions';
 import { api } from '@/lib/api';
+import { loadNotifications, saveNotifications as persistNotifications } from '@/lib/notifications';
 import { passwordFormatError } from '@/lib/password';
 import { useAuthStore } from '@/store/authStore';
-
-const NOTIFICATIONS_KEY = 'tapin_notifications';
 
 export default function ProfilePage() {
   const { user, setUser } = useAuthStore();
@@ -38,16 +37,10 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem(NOTIFICATIONS_KEY);
-    if (!saved) return;
-    try {
-      // Hydrate client-only preferences after mount to avoid an SSR mismatch.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setNotifications(JSON.parse(saved));
-    } catch (error) {
-      console.error('Failed to read notifications:', error);
-    }
-  }, []);
+    // Only hydrate notifications that belong to the signed-in company and user.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNotifications(loadNotifications({ companyId: user?.companyId, userId: user?.id }));
+  }, [user?.companyId, user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -62,7 +55,7 @@ export default function ProfilePage() {
 
   const saveNotifications = (next: NotificationItem[]) => {
     setNotifications(next);
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(next));
+    persistNotifications({ companyId: user?.companyId, userId: user?.id }, next);
   };
 
   const handleProfileSave = async (event: React.FormEvent) => {

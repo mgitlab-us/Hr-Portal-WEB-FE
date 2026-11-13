@@ -24,6 +24,7 @@ import { formatWeekdayDateDMY } from '@/lib/datetime';
 import { useAuthStore } from '@/store/authStore';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
+import { DurationInput } from '@/components/ui/duration-input';
 import {
   Select,
   SelectContent,
@@ -909,37 +910,62 @@ export default function DepartmentConfigPanel({
                         </div>
                       </div>
 
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                          Work / break / grace
-                        </label>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {[
-                            ['workMinutes', 'Work'],
-                            ['breakMinutes', 'Break'],
-                            ['graceMinutes', 'Grace'],
-                          ].map(([key, label]) => (
-                            <div key={key} className="relative">
-                              <input
-                                type="number"
-                                min={key === 'workMinutes' ? 60 : 0}
-                                value={shiftForm[key as 'workMinutes' | 'breakMinutes' | 'graceMinutes']}
-                                onChange={(event) =>
-                                  setShiftForm((current) => ({
-                                    ...current,
-                                    [key]: event.target.value,
-                                  }))
-                                }
-                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2 pr-7 text-center text-sm font-semibold text-slate-800 outline-none focus:border-blue-400"
-                              />
-                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-semibold uppercase text-slate-400">
-                                min
-                              </span>
-                              <p className="mt-1 text-center text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                                {label}
-                              </p>
-                            </div>
-                          ))}
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            Work duration
+                          </label>
+                          <DurationInput
+                            value={Number.parseInt(shiftForm.workMinutes, 10) || 0}
+                            onChange={(value) =>
+                              setShiftForm((current) => ({
+                                ...current,
+                                workMinutes: String(value),
+                              }))
+                            }
+                            inputClassName="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-center text-sm font-semibold text-slate-800 outline-none focus:border-blue-400"
+                            ariaLabel="Work duration"
+                          />
+                          <p className="text-[10px] text-slate-400">Minimum 1 hour.</p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            Break duration
+                          </label>
+                          <DurationInput
+                            value={Number.parseInt(shiftForm.breakMinutes, 10) || 0}
+                            onChange={(value) =>
+                              setShiftForm((current) => ({
+                                ...current,
+                                breakMinutes: String(value),
+                              }))
+                            }
+                            inputClassName="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-center text-sm font-semibold text-slate-800 outline-none focus:border-blue-400"
+                            ariaLabel="Break duration"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            Grace period
+                          </label>
+                          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:border-blue-400">
+                            <input
+                              type="number"
+                              min={0}
+                              value={shiftForm.graceMinutes}
+                              onChange={(event) =>
+                                setShiftForm((current) => ({
+                                  ...current,
+                                  graceMinutes: event.target.value,
+                                }))
+                              }
+                              className="w-full border-0 bg-transparent text-center text-sm font-semibold text-slate-800 outline-none"
+                              aria-label="Grace period minutes"
+                            />
+                            <span className="text-[11px] font-medium text-slate-400">minutes</span>
+                          </div>
                         </div>
                       </div>
                     </div>

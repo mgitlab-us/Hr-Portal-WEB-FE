@@ -26,6 +26,10 @@ import { getSocketUrl } from '@/lib/socketUrl';
 import { formatDateDMY, formatWeekdayDateDMY } from '@/lib/datetime';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import HeaderActions, { type NotificationItem } from '@/components/layout/HeaderActions';
+import {
+  loadNotifications,
+  saveNotifications as persistNotifications,
+} from '@/lib/notifications';
 import StatsDrilldownDialog, { type DrilldownMetric } from '@/components/dashboard/StatsDrilldownDialog';
 import {
   ChartContainer,
@@ -317,8 +321,6 @@ function formatWorkHours(raw: string | number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-const NOTIFICATIONS_KEY = 'tapin_notifications';
-
 export default function DashboardOverview() {
   const { user } = useAuthStore();
   const [stats, setStats] = useState({
@@ -352,23 +354,17 @@ export default function DashboardOverview() {
     return { from, to };
   }, []);
 
+  // Hydrate the bell from the cache that belongs to THIS company and user only.
+  // A cache written by another tenant (including the legacy untenanted key) is
+  // never displayed.
   useEffect(() => {
-    const init = () => {
-      const saved = localStorage.getItem(NOTIFICATIONS_KEY);
-      if (saved) {
-        try {
-          setNotifications(JSON.parse(saved));
-        } catch (e) {
-          console.error('Failed to parse notifications:', e);
-        }
-      }
-    };
-    init();
-  }, []);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNotifications(loadNotifications({ companyId: user?.companyId, userId: user?.id }));
+  }, [user?.companyId, user?.id]);
 
   const saveNotifications = (next: NotificationItem[]) => {
     setNotifications(next);
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(next));
+    persistNotifications({ companyId: user?.companyId, userId: user?.id }, next);
   };
 
   useEffect(() => {
@@ -454,8 +450,8 @@ export default function DashboardOverview() {
 
     const addNotification = (notif: NotificationItem) => {
       setNotifications((prev) => {
-        const updated = [notif, ...prev];
-        localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
+        const updated = [notif, ...prev].slice(0, 50);
+        persistNotifications({ companyId: user.companyId, userId: user.id }, updated);
         return updated;
       });
     };
@@ -476,6 +472,9 @@ export default function DashboardOverview() {
     });
 
     socket.on('notification:geofence', (data) => {
+      // Defense in depth: the server emits to the company room, and the payload
+      // carries the tenant id so a stale/cross-room event is dropped here too.
+      if (data?.companyId && data.companyId !== user.companyId) return;
       addNotification({
         id: data.id || makeId('geofence'),
         title: data.title || 'Geofence Alert',
@@ -487,6 +486,7 @@ export default function DashboardOverview() {
     });
 
     socket.on('notification:new', (data) => {
+      if (data?.companyId && data.companyId !== user.companyId) return;
       addNotification({
         id: data.id || makeId('notif'),
         title: data.title,
@@ -498,6 +498,7 @@ export default function DashboardOverview() {
     });
 
     socket.on('notice:new', (data) => {
+      if (data?.companyId && data.companyId !== user.companyId) return;
       addNotification({
         id: data.id || makeId('notice'),
         title: 'New Announcement',

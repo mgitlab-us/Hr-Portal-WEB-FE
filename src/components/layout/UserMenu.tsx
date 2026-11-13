@@ -39,6 +39,7 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const [open, setOpen] = React.useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
   const dark = variant === 'dark';
   const auto = variant === 'auto';
 
@@ -52,13 +53,25 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
   const roleColor = auto ? 'text-[#AFC0F0] lg:text-ink-soft' : dark ? 'text-[#AFC0F0]' : 'text-ink-soft';
   const chevronColor = auto ? 'text-[#AFC0F0] lg:text-ink-faint' : dark ? 'text-[#AFC0F0]' : 'text-ink-faint';
 
+  // Close on Escape, or on any pointer press outside this menu. A fixed
+  // backdrop does not work inside the top bar because `backdrop-blur` makes the
+  // header the containing block for fixed children, clipping it to 64px.
   React.useEffect(() => {
     if (!open) return;
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
+    const onPointerDown = (e: PointerEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
   }, [open]);
 
   const close = () => setOpen(false);
@@ -71,9 +84,7 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
 
   return (
     <>
-      <div className="relative z-50">
-        {open && <div className="fixed inset-0 z-40" onClick={close} aria-hidden="true" />}
-
+      <div ref={containerRef} className="relative z-50">
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}

@@ -19,15 +19,9 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { formatTime12h } from '@/lib/datetime';
 import { getNavItems } from '@/components/layout/DashboardLayout';
+import type { NotificationItem } from '@/lib/notifications';
 
-export interface NotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  timestamp: string;
-  type: 'geofence' | 'leave' | 'correction' | 'notice';
-  read: boolean;
-}
+export type { NotificationItem } from '@/lib/notifications';
 
 interface HeaderActionsProps {
   notifications: NotificationItem[];
@@ -82,20 +76,38 @@ export default function HeaderActions({
   const { user, logout } = useAuthStore();
   const [openMenu, setOpenMenu] = React.useState<MenuName | null>(null);
   const [query, setQuery] = React.useState('');
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const results = getNavItems(user?.role).filter((item) =>
     item.label.toLowerCase().includes(query.trim().toLowerCase())
   );
 
-  // Close any open menu on Escape
+  // Close on Escape, or on any pointer press outside this header action group.
+  // A `position: fixed` backdrop cannot be used here: the top bar applies
+  // `backdrop-blur`, which makes it the containing block for fixed children, so
+  // the backdrop would only cover the 64px header strip and clicks on the page
+  // below would never reach it.
   React.useEffect(() => {
     if (!openMenu) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenMenu(null);
+
+    const dismiss = () => {
+      setOpenMenu(null);
+      setQuery('');
     };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') dismiss();
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) dismiss();
+    };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
   }, [openMenu]);
 
   const close = () => {
@@ -128,10 +140,10 @@ export default function HeaderActions({
   };
 
   return (
-    <div className="relative z-20 flex items-center gap-1.5 sm:gap-3">
-      {/* Backdrop — sits below the buttons so switching menus takes one click */}
-      {openMenu && <div className="fixed inset-0 z-40" onClick={close} aria-hidden="true" />}
-
+    <div
+      ref={containerRef}
+      className="relative z-20 flex items-center gap-1.5 sm:gap-3"
+    >
       {/* ── Quick search */}
       <div className="relative z-50">
         <button
